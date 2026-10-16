@@ -20,15 +20,23 @@
 
 ---
 
-## 🚀 Instalación en la Raspberry Pi
+## 🚀 Instalación en la Raspberry Pi 5
 
-### Método Fácil (Doble Clic):
-1. Copiá la carpeta `vlc-autoplay-studio` a tu Raspberry Pi (por ejemplo en tu carpeta personal `/home/pi/` o en un pendrive).
-2. Abrí la carpeta en el explorador de archivos de la Raspberry Pi.
-3. Hacé **doble clic en `Instalar_Acceso_Directo.desktop`**.
-4. ¡Listo! Se creará automáticamente:
-   - Un acceso directo en tu **Escritorio**.
-   - Una entrada en el **Menú de Aplicaciones** (dentro de la categoría *Sonido y Video*).
+### Opción 1: Comando rápido de 1 sola línea (Recomendado)
+Abrí la terminal de la Raspberry Pi y pegá este comando. Descargará todo, instalará dependencias si faltan y creará el acceso directo en el Escritorio automáticamente:
+```bash
+curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash
+```
+
+---
+
+### Opción 2: Si descargaste el archivo ZIP desde GitHub
+Por seguridad, cuando descargás un archivo ZIP de internet en Linux/Raspberry Pi OS, el sistema le quita el permiso de "ejecución" a los archivos para evitar virus. Para instalarlo:
+1. Descomprimí el ZIP en tu carpeta personal (`/home/pi/`).
+2. Abrí la carpeta descomprimida.
+3. Hacé **clic derecho** sobre `Instalar_Acceso_Directo.desktop` -> **Propiedades** -> pestaña **Permisos**.
+4. En **Ejecutar**, seleccioná **"Cualquiera"** (o tildar *"Permitir ejecutar el archivo como un programa"*).
+5. ¡Listo! Ahora hacé **doble clic en `Instalar_Acceso_Directo.desktop`** y se creará el icono definitivo en tu Escritorio.
 
 ---
 
