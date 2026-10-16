@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Instalar Acceso Directo (Doble Clic)
+Comment=Haz doble clic aquí para crear los accesos directos en el Escritorio y Menú
+Exec=bash -c 'DIR="$(dirname "$0")"; cd "$DIR" 2>/dev/null || cd "$(dirname "%k")"; chmod +x install.sh && ./install.sh' %k
+Terminal=false
+Icon=system-software-install
+StartupNotify=true

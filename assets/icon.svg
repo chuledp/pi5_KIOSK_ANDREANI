@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="cone-orange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect x="16" y="16" width="224" height="224" rx="48" fill="url(#bg-grad)" stroke="#334155" stroke-width="4"/>
+
+  <!-- Subtle glow ring -->
+  <circle cx="128" cy="128" r="82" fill="none" stroke="url(#accent-grad)" stroke-width="6" stroke-dasharray="24 12" opacity="0.85"/>
+
+  <!-- Center Play / Loop symbol -->
+  <!-- Play triangle -->
+  <polygon points="112,96 166,128 112,160" fill="url(#cone-orange)"/>
+
+  <!-- Loop Arrow 1 (top) -->
+  <path d="M 128 62 A 66 66 0 0 1 188 100" fill="none" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
+  <polygon points="188,88 196,108 176,104" fill="#38bdf8"/>
+
+  <!-- Loop Arrow 2 (bottom) -->
+  <path d="M 128 194 A 66 66 0 0 1 68 156" fill="none" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
+  <polygon points="68,168 60,148 80,152" fill="#38bdf8"/>
+
+  <!-- Tiny Raspberry Pi / Status Dot -->
+  <circle cx="196" cy="60" r="10" fill="#10b981"/>
+</svg>
