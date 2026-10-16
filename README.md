@@ -1,89 +1,81 @@
-# 🎬 VLC AutoPlay Studio (Raspberry Pi 5)
+# 🎬 AutoPlay Studio • Sync & OSC (Raspberry Pi 5)
 
 > ### ⚡ Instalación Rápida (Pegar en la terminal de la Raspberry Pi):
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash
+> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/sync-osc/quick-install.sh | bash
 > ```
-> *(Descarga el software, instala dependencias si faltan y crea el acceso directo en el Escritorio)*
+> *(Instala dependencias: MPV, VLC, Python Tkinter, y crea el acceso directo en el Escritorio)*
 
 ---
 
-**VLC AutoPlay Studio** es una aplicación gráfica para **Raspberry Pi OS (Debian 12 Bookworm)** diseñada especialmente para artistas visuales, técnicos y montajistas de exposiciones. Permite programar la reproducción automática en bucle continuo de videos o audios al encender la Raspberry Pi de forma 100% visual y sin necesidad de escribir comandos en la terminal.
+**AutoPlay Studio (Sync & OSC)** es una aplicación visual para **Raspberry Pi OS (Debian 12 Bookworm)** diseñada para montajes de arte, exposiciones interactivas y espectáculos multimedia. 
+
+Permite reproducir videos y audios automáticamente al encender la Pi, **sincronizar múltiples Raspberry Pis entre sí por red local** y recibir disparos/cues en tiempo real vía **OSC (Open Sound Control)** desde **TouchDesigner**, **Resolume Arena**, **Reaper**, etc.
 
 ---
 
-## ✨ Características Principales
+## 🌐 Funcionalidades de Red & Sincronización
 
-- **Zero Terminal**: No hace falta editar archivos de sistema ni usar la consola.
-- **Modo Kiosk Profesional**:
-  - Bucle infinito continuo (`--loop`).
-  - Pantalla completa automática (`--fullscreen`).
-  - **Sin título ni textos OSD**: Evita que aparezca el nombre del archivo en la pantalla cada vez que el video se reinicia.
-  - Ocultamiento automático del cursor del mouse.
-  - Control de volumen y opción para silenciar audio por completo.
-- **Retardo de sincronización (Delay de Arranque)**: Configurable de 0 a 30 segundos para esperar a que el monitor/proyector HDMI y el servidor gráfico (Wayland/X11) terminen de negociar la señal antes de lanzar el video.
-- **Soporte de Archivos o Carpetas**: Reproduce un archivo individual (`.mp4`, `.mkv`, `.avi`, `.mov`, `.mp3`, `.wav`) o una carpeta entera con múltiples videos en orden.
-- **Gestión de Perfiles**: Guardá configuraciones para diferentes obras o salas (ej: *"Sala Principal"*, *"Pasillo Audio"*, *"Muestra Noche"*) y elegí cuál querés que arranque con un clic.
-- **Botón de Prueba Inmediata**: Probá el video a pantalla completa en el momento para verificar encuadre y sonido sin reiniciar la Raspberry Pi.
+### 1. Tres Roles en Red Configurables
+- 📻 **Receptor OSC (Follower)**: La Raspberry Pi escucha en un puerto UDP (por defecto `9000`). Responde instantáneamente a órdenes de reproducción, salto de tiempo, cambio de obra y sincronización de reloj.
+- 📡 **Emisor (Master Pi)**: Una Raspberry Pi lidera la sala. Reproduce su video y transmite periódicamente pulsos de reloj (`/sync/clock`) y órdenes por UDP Broadcast a todas las demás Pis de la red.
+- 🔌 **Autónomo (Kiosk Local)**: Reproducción independiente en bucle sin conexión a red.
 
----
+### 2. Motor MPV de Alta Precisión
+- Control por **socket IPC Unix**: Búsqueda (*seek*) instantánea frame-accurate sin la latencia de VLC.
+- **Algoritmo de Drift Correction (Sincronización suave de reloj)**:
+  - Si la Pi se desfasa menos de 300 ms del Master o de la consola, ajusta sutilmente la velocidad de reproducción (`1.025x` o `0.975x`) para volver a sincronizar **sin cortes de audio ni saltos visuales**.
+  - Si el desfasaje es mayor, ejecuta un salto directo (*hard seek*).
 
-## 🚀 Instalación en la Raspberry Pi 5
-
-### Opción 1: Comando rápido de 1 sola línea (Recomendado)
-Abrí la terminal de la Raspberry Pi y pegá este comando. Descargará todo, instalará dependencias si faltan y creará el acceso directo en el Escritorio automáticamente:
-```bash
-curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash
-```
+### 3. Monitor OSC en Tiempo Real
+En la parte inferior de la ventana, una barra de estado muestra en vivo cada paquete OSC que llega desde la red (ideal para verificar que TouchDesigner o Resolume están enviando datos antes de montar la sala).
 
 ---
 
-### Opción 2: Si descargaste el archivo ZIP desde GitHub
-Por seguridad, cuando descargás un archivo ZIP de internet en Linux/Raspberry Pi OS, el sistema le quita el permiso de "ejecución" a los archivos para evitar virus. Para instalarlo:
-1. Descomprimí el ZIP en tu carpeta personal (`/home/pi/`).
-2. Abrí la carpeta descomprimida.
-3. Hacé **clic derecho** sobre `Instalar_Acceso_Directo.desktop` -> **Propiedades** -> pestaña **Permisos**.
-4. En **Ejecutar**, seleccioná **"Cualquiera"** (o tildar *"Permitir ejecutar el archivo como un programa"*).
-5. ¡Listo! Ahora hacé **doble clic en `Instalar_Acceso_Directo.desktop`** y se creará el icono definitivo en tu Escritorio.
+## 🎛️ Tabla de Comandos OSC
+
+Por defecto, el sistema responde a las siguientes direcciones OSC:
+
+| Dirección OSC | Argumento | Acción |
+| :--- | :--- | :--- |
+| `/play` | *(ninguno o 1)* | Inicia o reanuda la reproducción |
+| `/pause` | *(ninguno o 1)* | Pausa el video/audio |
+| `/stop` | *(ninguno)* | Detiene y vuelve al inicio (segundo 0) |
+| `/seek` | `float` (segundos) | Salta al segundo indicado (ej: `/seek 15.5`) |
+| `/position` | `float` (`0.0` a `1.0`) | Salto normalizado (estilo fader de Resolume / TouchDesigner) |
+| `/cue` | `string` o `int` | Carga y reproduce el perfil que coincida en nombre o ID |
+| `/volume` | `int` (`0` a `100`) | Ajusta el volumen de salida dinámicamente |
+| `/sync/clock` | `float` (tiempo master) | Sincronización continua de reloj entre Pis |
+
+> [!TIP]
+> **Mapeo Personalizado**: Desde el botón **"⚙ Mapear Rutas OSC..."** podés cambiar cualquiera de estas direcciones para que coincida exactamente con las rutas nativas de tu software (por ejemplo `/composition/layers/1/clips/1/connect`).
 
 ---
 
-## 🖥️ Cómo Usar la Aplicación
+## 💻 Ejemplos de Integración
 
-1. **Abrir el programa**: Hacé doble clic en el icono **VLC AutoPlay Studio** en tu Escritorio o Menú.
-2. **Elegir tu video o audio**:
-   - Hacé clic en **"Elegir Archivo..."** y seleccioná tu video.
-   - O hacé clic en **"Elegir Carpeta..."** si tenés una serie de videos.
-3. **Ajustar opciones de sala**:
-   - Verificá que estén tildadas las opciones de *Bucle continuo*, *Pantalla completa*, *Ocultar títulos OSD* y *Ocultar cursor*.
-   - Si tu monitor tarda unos segundos en dar imagen tras encender, dejá el *Retardo de arranque* en 5 a 8 segundos.
-4. **Probar antes de reiniciar**:
-   - Hacé clic en el botón azul **"▶ Probar Reproducción Ahora"**.
-   - El video se reproducirá a pantalla completa con los ajustes elegidos. Para salir de la prueba podés presionar la tecla `q` en el teclado o el botón *"Detener Prueba"*.
-5. **Activar en el Arranque**:
-   - Hacé clic en el botón verde **"⚡ Activar este perfil en el Arranque"**.
-   - El indicador superior cambiará a verde: `● Arranque ACTIVO con: [Tu Perfil]`.
+### Con TouchDesigner
+1. Agregá un operador **OSC Out CHOP** o **OSC Out DAT**.
+2. Configurá `Network Address` con la IP de la Raspberry Pi (o `255.255.255.255` para broadcast a todas las Pis).
+3. Configurá `Network Port` en `9000`.
+4. Enviá canales como `/play`, `/pause` o `/seek`.
 
-¡Listo! A partir de ese momento, cada vez que enciendas la Raspberry Pi o se corte la luz y vuelva la energía, la Raspberry Pi iniciará tu video automáticamente a pantalla completa.
+### Con Resolume Arena
+1. En **Preferences > OSC**, activá **OSC Output**.
+2. Indicá la IP de la Pi y el puerto `9000`.
+3. Mapeá un clip o acción para enviar `/cue 1` o `/play`.
 
----
-
-## ⌨️ Atajos Útiles durante la Reproducción
-
-Si la Raspberry Pi arranca y está reproduciendo el video a pantalla completa en bucle y necesitás salir al escritorio:
-- Presioná la tecla **`q`** en el teclado conectado a la Pi: VLC se cerrará inmediatamente y volverás a tu escritorio.
-- O presioná **`Alt + F4`** / **`Esc`**.
+### Con Reaper
+1. En **Preferences > Control/OSC/web**, agregá un dispositivo **OSC**.
+2. Modo: *Send to device* hacia el puerto `9000`.
+3. Podés enviar marcas de tiempo de la línea de tiempo o triggers de regiones.
 
 ---
 
-## 🛠️ Requisitos del Sistema
+## ⌨️ Atajos Útiles en Pantalla Completa
 
-- **Hardware**: Raspberry Pi 5 (o Raspberry Pi 4 / 3 / Zero 2W).
-- **Sistema Operativo**: Raspberry Pi OS (Debian Bookworm recomendado, con entorno Wayland o X11).
-- **VLC**: Debe estar instalado VLC Media Player. Si por alguna razón tu sistema no lo tiene, se instala con:
-  ```bash
-  sudo apt update && sudo apt install -y vlc
-  ```
+- **`q`** en el teclado: Cierra inmediatamente el reproductor y vuelve al escritorio de la Pi.
+- **`Esc`** o **`Alt + F4`**: Salir de pantalla completa.
 
 ---
 
@@ -91,18 +83,25 @@ Si la Raspberry Pi arranca y está reproduciendo el video a pantalla completa en
 
 ```
 vlc-autoplay-studio/
-├── app.py                         # Interfaz gráfica principal (Tkinter)
+├── app.py                         # Interfaz gráfica (Kiosk + OSC + Monitor)
 ├── run.sh                         # Lanzador ejecutable
 ├── install.sh                     # Instalador de accesos directos
+├── quick-install.sh               # One-liner installer vía curl
 ├── Instalar_Acceso_Directo.desktop # Instalador visual para hacer doble clic
-├── README.md                      # Esta guía de uso
+├── README.md                      # Documentación completa
 ├── assets/
 │   ├── icon.svg                   # Icono vectorial
 │   └── icon.png                   # Icono en alta resolución
 ├── core/
 │   ├── __init__.py
-│   ├── profile_manager.py         # Guardado de perfiles JSON
-│   └── autostart.py               # Generador de scripts de arranque
+│   ├── profile_manager.py         # Configuración y perfiles JSON
+│   ├── autostart.py               # Generador de autostart
+│   ├── osc_receiver.py            # Servidor OSC ligero en Python puro
+│   ├── osc_broadcaster.py         # Emisor UDP Broadcast (Master Pi)
+│   ├── mpv_controller.py          # Controlador IPC Unix de MPV & Drift sync
+│   └── sync_runner.py             # Daemon de ejecución headless para boot
 └── tests/
-    └── test_core.py               # Pruebas unitarias
+    ├── test_core.py               # Tests de perfiles y autostart
+    ├── test_osc.py                # Tests de codificación y loopback OSC
+    └── test_sync_runner.py        # Tests del daemon de sincronización
 ```

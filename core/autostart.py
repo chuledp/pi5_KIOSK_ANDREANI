@@ -7,6 +7,7 @@ DEFAULT_AUTOSTART_DIR = os.path.expanduser("~/.config/autostart")
 DEFAULT_AUTOSTART_DESKTOP = os.path.join(DEFAULT_AUTOSTART_DIR, "vlc-autoplay.desktop")
 DEFAULT_RUNNER_DIR = os.path.expanduser("~/.config/vlc-autoplay")
 DEFAULT_RUNNER_PATH = os.path.join(DEFAULT_RUNNER_DIR, "vlc-runner.sh")
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 def build_vlc_command(profile: Dict[str, Any], binary: str = "cvlc") -> str:
     """
@@ -40,7 +41,6 @@ def build_vlc_command(profile: Dict[str, Any], binary: str = "cvlc") -> str:
 
     file_path = profile.get("file_path", "").strip()
     if file_path:
-        # Envolver en comillas seguras
         args.append(f'"{file_path}"')
 
     return " ".join(args)
@@ -49,12 +49,14 @@ class AutostartManager:
     def __init__(
         self,
         autostart_path: Optional[str] = None,
-        runner_path: Optional[str] = None
+        runner_path: Optional[str] = None,
+        project_dir: Optional[str] = None
     ):
         self.autostart_path = autostart_path or DEFAULT_AUTOSTART_DESKTOP
         self.runner_path = runner_path or DEFAULT_RUNNER_PATH
         self.autostart_dir = os.path.dirname(self.autostart_path)
         self.runner_dir = os.path.dirname(self.runner_path)
+        self.project_dir = project_dir or PROJECT_ROOT
 
     def is_active(self) -> bool:
         """Verifica si el autostart está configurado y el archivo .desktop existe."""
@@ -69,12 +71,17 @@ class AutostartManager:
             os.makedirs(self.runner_dir, exist_ok=True)
 
             delay = int(profile.get("delay_seconds", 5))
+            engine = profile.get("player_engine", "mpv")
+            role = profile.get("network_role", "follower")
+            profile_id = profile.get("id", "")
+
             vlc_cmd = build_vlc_command(profile, binary="cvlc")
 
             runner_content = f"""#!/usr/bin/env bash
 # ========================================================
-# Script generado automáticamente por VLC AutoPlay Studio
+# Script generado automáticamente por VLC / MPV AutoPlay Studio
 # Perfil: {profile.get('name', 'Instalación')}
+# Rol: {role.upper()} | Motor: {engine.upper()}
 # ========================================================
 
 # Esperar a que el entorno gráfico (Wayland/X11) y el audio estén listos
@@ -85,8 +92,13 @@ if command -v xset >/dev/null 2>&1; then
     xset s off -dpms || true
 fi
 
-# Iniciar reproducción en modo Kiosk
-exec {vlc_cmd}
+# Iniciar reproducción según el motor y rol configurado
+if [ "{engine}" = "mpv" ] || [ "{role}" != "standalone" ]; then
+    cd "{self.project_dir}"
+    exec python3 -m core.sync_runner "{profile_id}"
+else
+    exec {vlc_cmd}
+fi
 """
             with open(self.runner_path, "w", encoding="utf-8") as f:
                 f.write(runner_content)

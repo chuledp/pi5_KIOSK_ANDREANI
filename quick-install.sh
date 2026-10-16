@@ -1,32 +1,33 @@
 #!/usr/bin/env bash
 # ========================================================
-# Instalador rápido vía One-Liner para Raspberry Pi 5
+# Instalador rápido vía One-Liner para Raspberry Pi 5 (Sync & OSC)
 # Uso:
-#   curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/sync-osc/quick-install.sh | bash
 # ========================================================
 
 set -e
 
 TARGET_DIR="$HOME/vlc-autoplay-studio"
 REPO_URL="https://github.com/chuledp/pi5_KIOSK_ANDREANI.git"
+BRANCH="sync-osc"
 
-echo "=== Instalador Rápido VLC AutoPlay Studio ==="
+echo "=== Instalador Rápido AutoPlay Studio (Sync & OSC) ==="
 
-# Instalar git y vlc si no estuvieran presentes
-if ! command -v git >/dev/null 2>&1 || ! command -v vlc >/dev/null 2>&1; then
-    echo "Instalando dependencias necesarias (git, vlc)..."
-    sudo apt update && sudo apt install -y git vlc python3-tk
-fi
+# Instalar dependencias necesarias (git, mpv, vlc, python3-tk)
+echo "Verificando dependencias del sistema (git, mpv, vlc, python3-tk)..."
+sudo apt update && sudo apt install -y git mpv vlc python3-tk
 
-# Clonar o actualizar repositorio
+# Clonar o actualizar repositorio en la rama sync-osc
 if [ -d "$TARGET_DIR/.git" ]; then
     echo "Actualizando instalación existente en $TARGET_DIR..."
     cd "$TARGET_DIR"
-    git pull
+    git fetch origin
+    git checkout "$BRANCH"
+    git pull origin "$BRANCH"
 else
-    echo "Descargando VLC AutoPlay Studio en $TARGET_DIR..."
+    echo "Descargando AutoPlay Studio en $TARGET_DIR (rama $BRANCH)..."
     rm -rf "$TARGET_DIR"
-    git clone "$REPO_URL" "$TARGET_DIR"
+    git clone -b "$BRANCH" "$REPO_URL" "$TARGET_DIR"
     cd "$TARGET_DIR"
 fi
 
@@ -34,4 +35,4 @@ fi
 chmod +x install.sh app.py run.sh
 ./install.sh
 
-echo "=== ¡Listo! Ya podés usar VLC AutoPlay Studio desde tu Escritorio ==="
+echo "=== ¡Listo! Ya podés usar AutoPlay Studio con Sync & OSC desde tu Escritorio ==="

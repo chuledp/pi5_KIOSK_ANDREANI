@@ -54,10 +54,10 @@ if [ -d "$DESKTOP_DIR" ]; then
     fi
 fi
 
-# 6. Chequear si VLC está instalado y avisar
+# 6. Chequear si VLC o MPV están instalados
 VLC_STATUS="OK"
-if ! command -v vlc >/dev/null 2>&1 && ! command -v cvlc >/dev/null 2>&1; then
-    VLC_STATUS="FALTA_VLC"
+if ! command -v mpv >/dev/null 2>&1 && ! command -v vlc >/dev/null 2>&1 && ! command -v cvlc >/dev/null 2>&1; then
+    VLC_STATUS="FALTA_PLAYERS"
 fi
 
 echo "=== Instalación completada con éxito ==="
@@ -80,14 +80,14 @@ root = tk.Tk()
 root.withdraw()
 
 status = '$VLC_STATUS'
-if status == 'FALTA_VLC':
+if status == 'FALTA_PLAYERS':
     messagebox.showwarning(
-        'VLC AutoPlay Studio',
-        '¡Acceso directo creado con éxito!\n\nNota: No se detectó VLC Media Player instalado.\nPara instalarlo, abrí una terminal y ejecutá:\nsudo apt install -y vlc'
+        'AutoPlay Studio',
+        '¡Acceso directo creado con éxito!\n\nNota: Se recomienda instalar MPV y VLC para habilitar sincronización OSC.\nEjecutá en una terminal:\nsudo apt install -y mpv vlc'
     )
 else:
     messagebox.showinfo(
-        'VLC AutoPlay Studio',
+        'AutoPlay Studio (Sync & OSC)',
         '¡Instalación completada!\n\nSe creó el acceso directo en:\n• El Escritorio\n• El Menú de Aplicaciones (Sonido y Video)\n\nYa podés abrir el programa con doble clic.'
     )
 " 2>/dev/null || true

@@ -6,6 +6,18 @@ from typing import Dict, List, Optional, Any
 DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/vlc-autoplay")
 DEFAULT_CONFIG_PATH = os.path.join(DEFAULT_CONFIG_DIR, "config.json")
 
+DEFAULT_OSC_MAPPINGS = {
+    "/play": "/play",
+    "/pause": "/pause",
+    "/stop": "/stop",
+    "/resume": "/resume",
+    "/seek": "/seek",
+    "/position": "/position",
+    "/cue": "/cue",
+    "/volume": "/volume",
+    "/sync/clock": "/sync/clock"
+}
+
 def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
     return {
         "id": str(uuid.uuid4())[:8],
@@ -18,7 +30,12 @@ def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
         "no_audio": False,
         "volume": 100,
         "delay_seconds": 5,
-        "extra_args": ""
+        "extra_args": "",
+        "player_engine": "mpv",  # "mpv" o "vlc"
+        "network_role": "follower",  # "standalone", "follower", "master"
+        "osc_port": 9000,
+        "osc_broadcast_ip": "255.255.255.255",
+        "osc_mappings": dict(DEFAULT_OSC_MAPPINGS)
     }
 
 class ProfileManager:
@@ -39,7 +56,20 @@ class ProfileManager:
                     loaded = json.load(f)
                     self.data["active_profile_id"] = loaded.get("active_profile_id")
                     self.data["autostart_enabled"] = bool(loaded.get("autostart_enabled", False))
-                    self.data["profiles"] = loaded.get("profiles", [])
+                    profiles = loaded.get("profiles", [])
+                    # Asegurar campos nuevos en perfiles existentes
+                    for p in profiles:
+                        if "player_engine" not in p:
+                            p["player_engine"] = "mpv"
+                        if "network_role" not in p:
+                            p["network_role"] = "standalone"
+                        if "osc_port" not in p:
+                            p["osc_port"] = 9000
+                        if "osc_broadcast_ip" not in p:
+                            p["osc_broadcast_ip"] = "255.255.255.255"
+                        if "osc_mappings" not in p:
+                            p["osc_mappings"] = dict(DEFAULT_OSC_MAPPINGS)
+                    self.data["profiles"] = profiles
             except Exception as e:
                 print(f"Error cargando configuración: {e}")
                 self._init_defaults()
@@ -112,6 +142,8 @@ class ProfileManager:
         clone = dict(source)
         clone["id"] = str(uuid.uuid4())[:8]
         clone["name"] = f"{source['name']} (Copia)"
+        if "osc_mappings" in source:
+            clone["osc_mappings"] = dict(source["osc_mappings"])
         self.data["profiles"].append(clone)
         self.save()
         return clone
@@ -119,7 +151,7 @@ class ProfileManager:
     def delete_profile(self, profile_id: str) -> bool:
         profiles = self.data["profiles"]
         if len(profiles) <= 1:
-            return False  # No permitimos eliminar el único perfil
+            return False
         
         self.data["profiles"] = [p for p in profiles if p["id"] != profile_id]
         if self.data.get("active_profile_id") == profile_id:
