@@ -1,5 +1,13 @@
 # 🎬 VLC AutoPlay Studio (Raspberry Pi 5)
 
+> ### ⚡ Instalación Rápida (Pegar en la terminal de la Raspberry Pi):
+> ```bash
+> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash
+> ```
+> *(Descarga el software, instala dependencias si faltan y crea el acceso directo en el Escritorio)*
+
+---
+
 **VLC AutoPlay Studio** es una aplicación gráfica para **Raspberry Pi OS (Debian 12 Bookworm)** diseñada especialmente para artistas visuales, técnicos y montajistas de exposiciones. Permite programar la reproducción automática en bucle continuo de videos o audios al encender la Raspberry Pi de forma 100% visual y sin necesidad de escribir comandos en la terminal.
 
 ---
