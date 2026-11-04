@@ -32,6 +32,7 @@ def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
         "delay_seconds": 5,
         "extra_args": "",
         "player_engine": "mpv",  # "mpv" o "vlc"
+        "hwdec_mode": "drm-copy",  # "drm-copy", "no", "drm", "auto-safe"
         "network_role": "follower",  # "standalone", "follower", "master"
         "osc_port": 9000,
         "osc_broadcast_ip": "255.255.255.255",
@@ -61,6 +62,8 @@ class ProfileManager:
                     for p in profiles:
                         if "player_engine" not in p:
                             p["player_engine"] = "mpv"
+                        if "hwdec_mode" not in p:
+                            p["hwdec_mode"] = "drm-copy"
                         if "network_role" not in p:
                             p["network_role"] = "standalone"
                         if "osc_port" not in p:

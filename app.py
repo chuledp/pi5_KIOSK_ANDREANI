@@ -320,6 +320,7 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_osc_port = tk.IntVar(value=9000)
         self.var_broadcast_ip = tk.StringVar(value="255.255.255.255")
         self.var_engine = tk.StringVar(value="mpv")
+        self.var_hwdec_mode = tk.StringVar(value="drm-copy")
 
         roles_row = tk.Frame(card_net, bg=THEME["card"])
         roles_row.pack(fill=tk.X, pady=(6, 4))
@@ -371,8 +372,19 @@ class VLCAutoPlayApp(tk.Tk):
 
         tk.Label(net_fields_row, text="Motor:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
         self.combo_engine = ttk.Combobox(net_fields_row, values=["mpv", "vlc"], width=6, state="readonly", textvariable=self.var_engine)
-        self.combo_engine.pack(side=tk.LEFT)
+        self.combo_engine.pack(side=tk.LEFT, padx=(0, 14))
         self.combo_engine.bind("<<ComboboxSelected>>", self.save_current_settings)
+
+        tk.Label(net_fields_row, text="H.265 HW:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.combo_hwdec = ttk.Combobox(
+            net_fields_row,
+            values=["drm-copy", "no", "drm", "auto-safe"],
+            width=10,
+            state="readonly",
+            textvariable=self.var_hwdec_mode
+        )
+        self.combo_hwdec.pack(side=tk.LEFT)
+        self.combo_hwdec.bind("<<ComboboxSelected>>", self.save_current_settings)
 
         # Tarjeta 4: Ajustes de Exhibición
         card_opts = tk.Frame(right_col, bg=THEME["card"], padx=14, pady=10, bd=1, relief="ridge")
@@ -556,6 +568,7 @@ class VLCAutoPlayApp(tk.Tk):
         self.entry_bcast.insert(0, prof.get("osc_broadcast_ip", "255.255.255.255"))
 
         self.var_engine.set(prof.get("player_engine", "mpv"))
+        self.var_hwdec_mode.set(prof.get("hwdec_mode", "drm-copy"))
 
         self.var_loop.set(prof.get("loop", True))
         self.var_fullscreen.set(prof.get("fullscreen", True))
@@ -615,6 +628,7 @@ class VLCAutoPlayApp(tk.Tk):
             "osc_port": port,
             "osc_broadcast_ip": self.entry_bcast.get().strip() or "255.255.255.255",
             "player_engine": self.var_engine.get(),
+            "hwdec_mode": self.var_hwdec_mode.get(),
             "loop": self.var_loop.get(),
             "fullscreen": self.var_fullscreen.get(),
             "hide_osd": self.var_hide_osd.get(),
@@ -666,7 +680,7 @@ class VLCAutoPlayApp(tk.Tk):
 
     def browse_file(self):
         filetypes = [
-            ("Archivos de Video y Audio", "*.mp4 *.mkv *.avi *.mov *.mp3 *.wav *.flac *.webm *.ogv"),
+            ("Archivos de Video y Audio", "*.mp4 *.mkv *.mov *.hevc *.h265 *.m4v *.avi *.ts *.mp3 *.wav *.flac *.webm *.ogv"),
             ("Todos los archivos", "*.*")
         ]
         chosen = filedialog.askopenfilename(title="Seleccionar archivo", filetypes=filetypes)
@@ -858,6 +872,14 @@ class VLCAutoPlayApp(tk.Tk):
         prof = self.profile_mgr.get_profile(self.current_profile_id)
         if not prof or not prof.get("file_path"):
             messagebox.showwarning("Atención", "Por favor seleccioná un archivo de video o audio para probar.")
+            return
+
+        file_path = prof.get("file_path", "").strip()
+        if not os.path.exists(file_path):
+            messagebox.showerror(
+                "Archivo no encontrado",
+                f"No se encontró el archivo o carpeta configurado:\n\n{file_path}\n\nVerificá la ruta o volvé a elegir el archivo recodificado."
+            )
             return
 
         # Pausar monitor pasivo para no colisionar con el puerto del daemon

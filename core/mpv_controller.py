@@ -4,20 +4,39 @@ Proporciona control frame-accurate, búsqueda instantánea y algoritmo de sincro
 """
 
 import os
+import sys
 import json
 import time
+import shlex
 import socket
+import threading
 import subprocess
 from typing import Optional, Dict, Any, List
 
 DEFAULT_SOCKET_PATH = "/tmp/mpv-autoplay-socket"
+DEFAULT_LOG_PATH = "/tmp/mpv-autoplay.log"
+
+# Errores típicos en Raspberry Pi 5 cuando falla el mapeo DRM/SAND128 en H.265 (pantalla azul)
+HWDEC_ERROR_PATTERNS = (
+    "Initializing texture for hardware decoding failed",
+    "unsupported DRM image format",
+    "Unsupported pixel format",
+    "Impossible to convert between the formats",
+    "Failed to transfer data from hardware surface",
+    "Hardware decoding of this stream is unsupported",
+    "mapping DRM dmabuf failed",
+)
+
 
 class MPVController:
-    def __init__(self, socket_path: str = DEFAULT_SOCKET_PATH):
+    def __init__(self, socket_path: str = DEFAULT_SOCKET_PATH, log_path: str = DEFAULT_LOG_PATH):
         self.socket_path = socket_path
+        self.log_path = log_path
         self.process: Optional[subprocess.Popen] = None
         self._sock: Optional[socket.socket] = None
         self._request_id = 1
+        self._current_file: str = ""
+        self._fallback_triggered: bool = False
 
     def is_running(self) -> bool:
         if self.process is not None:
@@ -29,16 +48,18 @@ class MPVController:
         """Inicia el proceso MPV en modo kiosk con socket IPC activado."""
         self.terminate()
 
-        # Limpiar socket previo si existe
-        if os.path.exists(self.socket_path):
-            try:
-                os.remove(self.socket_path)
-            except Exception:
-                pass
+        # Limpiar socket y log previos si existen
+        for path in (self.socket_path, self.log_path):
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
 
         cmd = [
             binary,
             f"--input-ipc-server={self.socket_path}",
+            f"--log-file={self.log_path}",
             "--idle=yes",
             "--no-terminal",
             "--keep-open=yes",
@@ -51,6 +72,7 @@ class MPVController:
 
         if profile.get("loop", True):
             cmd.append("--loop-file=inf")
+            cmd.append("--loop-playlist=inf")
 
         if profile.get("hide_mouse", True):
             cmd.append("--cursor-autohide=always")
@@ -61,10 +83,67 @@ class MPVController:
             vol = profile.get("volume", 100)
             cmd.append(f"--volume={vol}")
 
-        # Optimizaciones de hardware para Raspberry Pi 5
-        cmd.extend(["--hwdec=auto-safe"])
+        # Configuración de decodificación y renderizado para Raspberry Pi 5 (H.265 / HEVC)
+        # Nota: '--hwdec=auto-safe' elige 'drm' zero-copy (formato SAND128), lo cual en el
+        # escritorio Wayland/X11 de la Pi 5 falla al crear la textura OpenGL y deja la pantalla azul.
+        # 'drm-copy' (con fallback automático a 'no' / CPU multihilo) evita la pantalla azul.
+        hwdec_mode = profile.get("hwdec_mode", "drm-copy")
+        is_linux = sys.platform.startswith("linux")
+
+        if is_linux:
+            if hwdec_mode == "no":
+                cmd.extend([
+                    "--hwdec=no",
+                    "--vo=gpu",
+                    "--gpu-api=opengl",
+                    "--gpu-dumb-mode=yes",
+                    "--profile=fast",
+                    "--vd-lavc-threads=4"
+                ])
+            elif hwdec_mode == "drm":
+                cmd.extend([
+                    "--hwdec=drm",
+                    "--vo=gpu",
+                    "--gpu-context=drm",
+                    "--profile=fast",
+                    "--vd-lavc-threads=4"
+                ])
+            elif hwdec_mode == "auto-safe":
+                cmd.extend([
+                    "--hwdec=auto-safe",
+                    "--vo=gpu",
+                    "--gpu-api=opengl",
+                    "--gpu-dumb-mode=yes",
+                    "--profile=fast",
+                    "--vd-lavc-threads=4"
+                ])
+            else:
+                # Default: drm-copy (decodifica H.265 por hardware y copia a RAM estándar evitando pantalla azul)
+                cmd.extend([
+                    "--hwdec=drm-copy",
+                    "--vo=gpu",
+                    "--gpu-api=opengl",
+                    "--gpu-dumb-mode=yes",
+                    "--profile=fast",
+                    "--vd-lavc-threads=4"
+                ])
+        else:
+            # macOS / otros entornos de prueba
+            if hwdec_mode == "no":
+                cmd.append("--hwdec=no")
+            else:
+                cmd.append("--hwdec=auto-safe")
+
+        extra = profile.get("extra_args", "").strip()
+        if extra:
+            try:
+                cmd.extend(shlex.split(extra))
+            except Exception:
+                cmd.append(extra)
 
         file_path = profile.get("file_path", "").strip()
+        self._current_file = file_path
+        self._fallback_triggered = (hwdec_mode == "no")
         if file_path:
             cmd.append(file_path)
 
@@ -78,11 +157,50 @@ class MPVController:
             for _ in range(30):
                 time.sleep(0.1)
                 if os.path.exists(self.socket_path):
-                    return True
+                    break
+
+            # Asegurar que no quede en pausa al iniciar
+            self.play()
+
+            # Iniciar watchdog anti-pantalla-azul para H.265 en Pi 5
+            if not self._fallback_triggered:
+                self._start_hwdec_watchdog()
+
             return True
         except Exception as e:
             print(f"Error lanzando MPV: {e}")
             return False
+
+    def _start_hwdec_watchdog(self):
+        """
+        Monitorea el log de MPV durante los primeros segundos tras cargar un video H.265.
+        Si detecta que el driver V3D/OpenGL de la Pi 5 rechazó la textura de hardware
+        (causante de la pantalla azul), cambia automáticamente a decodificación por CPU
+        multihilo (hwdec=no) y recarga el video sin intervención del usuario.
+        """
+        def _watch():
+            for _ in range(16):  # Monitorear durante ~4 segundos
+                time.sleep(0.25)
+                if self._fallback_triggered or not self.is_running():
+                    return
+                if not os.path.exists(self.log_path):
+                    continue
+                try:
+                    with open(self.log_path, "r", encoding="utf-8", errors="ignore") as f:
+                        log_text = f.read()
+                    if any(pat in log_text for pat in HWDEC_ERROR_PATTERNS):
+                        print("[MPV Watchdog] Detectado fallo de textura HW H.265 (pantalla azul). Cambiando a hwdec=no...")
+                        self._fallback_triggered = True
+                        self.send_command(["set_property", "hwdec", "no"])
+                        if self._current_file:
+                            self.send_command(["loadfile", self._current_file, "replace"])
+                            self.play()
+                        return
+                except Exception:
+                    pass
+
+        t = threading.Thread(target=_watch, daemon=True)
+        t.start()
 
     def _ensure_socket(self) -> bool:
         if self._sock:
@@ -159,7 +277,11 @@ class MPVController:
         self.send_command(["set_property", "volume", max(0, min(100, int(volume)))])
 
     def load_file(self, file_path: str):
-        self.send_command(["loadfile", file_path])
+        self._current_file = file_path
+        self.send_command(["loadfile", file_path, "replace"])
+        self.play()
+        if not self._fallback_triggered:
+            self._start_hwdec_watchdog()
 
     def get_time_pos(self) -> float:
         res = self.send_command(["get_property", "time-pos"])
