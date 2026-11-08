@@ -160,6 +160,10 @@ if command -v amixer >/dev/null 2>&1; then
     amixer sset PCM 100% unmute 2>/dev/null || true
 fi
 
+# Auto-configurar el Mixer Interno de la Focusrite Scarlett 8i6 (6 Salidas: 1-4 + S/PDIF 5-6)
+cd "{self.project_dir}"
+python3 -c "from core.profile_manager import ProfileManager; from core.scarlett_mixer import configure_scarlett_8i6_hardware; pm = ProfileManager(); p = pm.get_profile('{profile_id}') or pm.get_active_profile() or {{}}; configure_scarlett_8i6_hardware(p) if p.get('scarlett_enabled', True) else None" 2>/dev/null || true
+
 # Iniciar reproducción según el motor y rol configurado
 if [ "{engine}" = "mpv" ] || [ "{role}" != "standalone" ]; then
     cd "{self.project_dir}"

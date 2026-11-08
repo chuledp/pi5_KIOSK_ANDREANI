@@ -14,6 +14,7 @@ from typing import Optional
 from core.profile_manager import ProfileManager
 from core.mpv_controller import MPVController
 from core.autostart import build_vlc_args, ensure_system_volume_max
+from core.scarlett_mixer import configure_scarlett_8i6_hardware
 from core.osc_receiver import OSCReceiver
 from core.osc_broadcaster import OSCBroadcaster
 
@@ -48,9 +49,11 @@ class SyncDaemon:
         broadcast_ip = prof.get("osc_broadcast_ip", "255.255.255.255")
         mappings = prof.get("osc_mappings", {})
 
-        # Asegurar el volumen maestro de la Raspberry Pi al 100% antes de reproducir
+        # Asegurar el volumen maestro de la Raspberry Pi al 100% y rutear la Scarlett 8i6 antes de reproducir
         if not prof.get("no_audio", False):
             ensure_system_volume_max()
+            if prof.get("scarlett_enabled", True):
+                configure_scarlett_8i6_hardware(prof)
 
         print(f"Iniciando SyncDaemon con perfil '{prof['name']}' (Rol: {role.upper()}, Motor: {engine.upper()}, Puerto: {port})")
 

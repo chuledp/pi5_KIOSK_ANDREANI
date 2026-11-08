@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from core.profile_manager import ProfileManager, create_default_profile
 from core.autostart import AutostartManager, build_vlc_command
+from core.scarlett_mixer import build_mpv_audio_filter, _split_gain_to_dual_bus
 
 class TestVLCAutoPlayCore(unittest.TestCase):
     def setUp(self):
@@ -96,6 +97,25 @@ class TestVLCAutoPlayCore(unittest.TestCase):
         # Disable
         am.disable()
         self.assertFalse(am.is_active())
+
+    def test_scarlett_6ch_filter_and_mix_bus(self):
+        profile = create_default_profile("Scarlett 8i6 Test")
+        profile["scarlett_enabled"] = True
+        profile["scarlett_gain_12"] = 120
+        profile["scarlett_gain_34"] = 150
+        profile["scarlett_gain_sub"] = 180
+        profile["audio_boost"] = True
+
+        af = build_mpv_audio_filter(profile)
+        self.assertIn("pan=5.1", af)
+        self.assertIn("c0=1.20*c0|c1=1.20*c1", af)
+        self.assertIn("c2=1.50*c0|c3=1.50*c1", af)
+        self.assertIn("c4=0.90*c0+0.90*c1|c5=0.90*c0+0.90*c1", af)
+        self.assertIn("alimiter", af)
+
+        # Dual bus split (0-200% -> Primary 0-100% + Parallel Boost 0-100%)
+        self.assertEqual(_split_gain_to_dual_bus(80), (80, 0))
+        self.assertEqual(_split_gain_to_dual_bus(165), (100, 65))
 
 if __name__ == "__main__":
     unittest.main()

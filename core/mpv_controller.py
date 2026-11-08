@@ -13,6 +13,8 @@ import threading
 import subprocess
 from typing import Optional, Dict, Any, List
 
+from core.scarlett_mixer import build_mpv_audio_filter, apply_scarlett_mix_levels
+
 DEFAULT_SOCKET_PATH = "/tmp/mpv-autoplay-socket"
 DEFAULT_LOG_PATH = "/tmp/mpv-autoplay.log"
 
@@ -83,8 +85,11 @@ class MPVController:
         else:
             vol = max(0, min(300, int(profile.get("volume", 100))))
             cmd.append(f"--volume={vol}")
-            if profile.get("audio_boost", True):
-                cmd.append("--af=lavfi=[dynaudnorm=f=200:g=15:p=0.95]")
+            if profile.get("scarlett_enabled", True):
+                cmd.append("--audio-channels=5.1")
+            af_str = build_mpv_audio_filter(profile)
+            if af_str:
+                cmd.append(f"--af={af_str}")
 
         # Configuración de decodificación y renderizado para Raspberry Pi 5 (H.265 / HEVC)
         # Nota: '--hwdec=auto-safe' elige 'drm' zero-copy (formato SAND128), lo cual en el
@@ -281,6 +286,13 @@ class MPVController:
 
     def set_audio_boost(self, enabled: bool):
         af_val = "lavfi=[dynaudnorm=f=200:g=15:p=0.95]" if enabled else ""
+        self.send_command(["set_property", "af", af_val])
+
+    def update_audio_routing(self, profile: Dict[str, Any]):
+        """Actualiza en vivo los niveles de los 6 canales en MPV y en los Mixes de la Scarlett 8i6."""
+        if profile.get("scarlett_enabled", True):
+            apply_scarlett_mix_levels(profile)
+        af_val = build_mpv_audio_filter(profile)
         self.send_command(["set_property", "af", af_val])
 
     def load_file(self, file_path: str):

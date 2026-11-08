@@ -30,6 +30,10 @@ def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
         "no_audio": False,
         "volume": 150,
         "audio_boost": True,
+        "scarlett_enabled": True,
+        "scarlett_gain_12": 120,
+        "scarlett_gain_34": 120,
+        "scarlett_gain_sub": 130,
         "delay_seconds": 5,
         "extra_args": "",
         "player_engine": "mpv",  # "mpv" o "vlc"
@@ -67,6 +71,14 @@ class ProfileManager:
                             p["hwdec_mode"] = "drm-copy"
                         if "audio_boost" not in p:
                             p["audio_boost"] = True
+                        if "scarlett_enabled" not in p:
+                            p["scarlett_enabled"] = True
+                        if "scarlett_gain_12" not in p:
+                            p["scarlett_gain_12"] = 120
+                        if "scarlett_gain_34" not in p:
+                            p["scarlett_gain_34"] = 120
+                        if "scarlett_gain_sub" not in p:
+                            p["scarlett_gain_sub"] = 130
                         if "network_role" not in p:
                             p["network_role"] = "standalone"
                         if "osc_port" not in p:
