@@ -2,7 +2,7 @@
 
 > ### ⚡ Instalación Rápida (Pegar en la terminal de la Raspberry Pi):
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/sync-osc/quick-install.sh | bash
+> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash
 > ```
 > *(Instala dependencias: MPV, VLC, Python Tkinter, y crea el acceso directo en el Escritorio)*
 
@@ -44,7 +44,7 @@ Por defecto, el sistema responde a las siguientes direcciones OSC:
 | `/seek` | `float` (segundos) | Salta al segundo indicado (ej: `/seek 15.5`) |
 | `/position` | `float` (`0.0` a `1.0`) | Salto normalizado (estilo fader de Resolume / TouchDesigner) |
 | `/cue` | `string` o `int` | Carga y reproduce el perfil que coincida en nombre o ID |
-| `/volume` | `int` (`0` a `100`) | Ajusta el volumen de salida dinámicamente |
+| `/volume` | `int` (`0` a `300`) | Ajusta el volumen de salida dinámicamente (soporta Boost hasta 300%) |
 | `/sync/clock` | `float` (tiempo master) | Sincronización continua de reloj entre Pis |
 
 > [!TIP]

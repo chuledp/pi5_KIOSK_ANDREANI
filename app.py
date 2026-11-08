@@ -397,8 +397,9 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_hide_osd = tk.BooleanVar(value=True)
         self.var_hide_mouse = tk.BooleanVar(value=True)
         self.var_no_audio = tk.BooleanVar(value=False)
+        self.var_audio_boost = tk.BooleanVar(value=True)
         self.var_delay = tk.IntVar(value=5)
-        self.var_volume = tk.IntVar(value=100)
+        self.var_volume = tk.IntVar(value=150)
 
         chk_grid = tk.Frame(card_opts, bg=THEME["card"])
         chk_grid.pack(fill=tk.X, pady=(4, 6))
@@ -407,13 +408,16 @@ class VLCAutoPlayApp(tk.Tk):
         cb1.grid(row=0, column=0, sticky="w", padx=(0, 20), pady=2)
 
         cb2 = ttk.Checkbutton(chk_grid, text="Pantalla completa", variable=self.var_fullscreen, command=self.save_current_settings, style="Card.TCheckbutton")
-        cb2.grid(row=0, column=1, sticky="w", pady=2)
+        cb2.grid(row=0, column=1, sticky="w", padx=(0, 20), pady=2)
+
+        cb5 = ttk.Checkbutton(chk_grid, text="🔊 Boost + Limitador (Anti-saturación)", variable=self.var_audio_boost, command=self._on_audio_boost_toggle, style="Card.TCheckbutton")
+        cb5.grid(row=0, column=2, sticky="w", pady=2)
 
         cb3 = ttk.Checkbutton(chk_grid, text="Ocultar título / OSD", variable=self.var_hide_osd, command=self.save_current_settings, style="Card.TCheckbutton")
         cb3.grid(row=1, column=0, sticky="w", padx=(0, 20), pady=2)
 
         cb4 = ttk.Checkbutton(chk_grid, text="Ocultar cursor mouse", variable=self.var_hide_mouse, command=self.save_current_settings, style="Card.TCheckbutton")
-        cb4.grid(row=1, column=1, sticky="w", pady=2)
+        cb4.grid(row=1, column=1, sticky="w", padx=(0, 20), pady=2)
 
         # Sliders
         slider_frame = tk.Frame(card_opts, bg=THEME["card"])
@@ -431,10 +435,10 @@ class VLCAutoPlayApp(tk.Tk):
         f_vol = tk.Frame(slider_frame, bg=THEME["card"])
         f_vol.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-        self.lbl_vol_val = tk.Label(f_vol, text="Volumen: 100%", bg=THEME["card"], fg=THEME["text"], font=("Helvetica", 9, "bold"))
+        self.lbl_vol_val = tk.Label(f_vol, text="Volumen: 150% (Amplificado)", bg=THEME["card"], fg=THEME["amber"], font=("Helvetica", 9, "bold"))
         self.lbl_vol_val.pack(anchor="w")
 
-        scale_vol = ttk.Scale(f_vol, from_=0, to=100, orient="horizontal", variable=self.var_volume, command=self._on_vol_slide)
+        scale_vol = ttk.Scale(f_vol, from_=0, to=300, orient="horizontal", variable=self.var_volume, command=self._on_vol_slide)
         scale_vol.pack(fill=tk.X)
 
         # Tarjeta 5: Botones de Acción
@@ -514,10 +518,36 @@ class VLCAutoPlayApp(tk.Tk):
         self.lbl_delay_val.config(text=f"Retardo de arranque: {secs} seg")
         self.save_current_settings()
 
+    def _update_vol_label(self, vol: int):
+        if vol > 100:
+            self.lbl_vol_val.config(text=f"Volumen: {vol}% (Boost activo)", fg=THEME["amber"])
+        else:
+            self.lbl_vol_val.config(text=f"Volumen: {vol}%", fg=THEME["text"])
+
     def _on_vol_slide(self, val):
         vol = int(float(val))
-        self.lbl_vol_val.config(text=f"Volumen: {vol}%")
+        prev_vol = 100
+        if self.current_profile_id:
+            prof = self.profile_mgr.get_profile(self.current_profile_id)
+            if prof:
+                prev_vol = int(prof.get("volume", 100))
+
+        # Activar automáticamente el limitador si pasa de <=100% a >100%
+        if prev_vol <= 100 and vol > 100 and not self.var_audio_boost.get():
+            self.var_audio_boost.set(True)
+            if self.active_daemon and self.active_daemon.mpv.is_running():
+                self.active_daemon.mpv.set_audio_boost(True)
+
+        self._update_vol_label(vol)
         self.save_current_settings()
+
+        if self.active_daemon and self.active_daemon.mpv.is_running():
+            self.active_daemon.mpv.set_volume(vol)
+
+    def _on_audio_boost_toggle(self):
+        self.save_current_settings()
+        if self.active_daemon and self.active_daemon.mpv.is_running():
+            self.active_daemon.mpv.set_audio_boost(self.var_audio_boost.get())
 
     def on_role_change(self):
         role = self.var_network_role.get()
@@ -575,14 +605,15 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_hide_osd.set(prof.get("hide_osd", True))
         self.var_hide_mouse.set(prof.get("hide_mouse", True))
         self.var_no_audio.set(prof.get("no_audio", False))
+        self.var_audio_boost.set(prof.get("audio_boost", True))
 
         delay = prof.get("delay_seconds", 5)
         self.var_delay.set(delay)
         self.lbl_delay_val.config(text=f"Retardo de arranque: {delay} seg")
 
-        vol = prof.get("volume", 100)
+        vol = int(prof.get("volume", 100))
         self.var_volume.set(vol)
-        self.lbl_vol_val.config(text=f"Volumen: {vol}%")
+        self._update_vol_label(vol)
 
         self.on_role_change()
 
@@ -634,6 +665,7 @@ class VLCAutoPlayApp(tk.Tk):
             "hide_osd": self.var_hide_osd.get(),
             "hide_mouse": self.var_hide_mouse.get(),
             "no_audio": self.var_no_audio.get(),
+            "audio_boost": self.var_audio_boost.get(),
             "delay_seconds": int(self.var_delay.get()),
             "volume": int(self.var_volume.get())
         }

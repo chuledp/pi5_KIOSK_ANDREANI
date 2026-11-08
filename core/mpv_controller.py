@@ -77,11 +77,14 @@ class MPVController:
         if profile.get("hide_mouse", True):
             cmd.append("--cursor-autohide=always")
 
+        cmd.append("--volume-max=300")
         if profile.get("no_audio", False):
             cmd.append("--mute=yes")
         else:
-            vol = profile.get("volume", 100)
+            vol = max(0, min(300, int(profile.get("volume", 100))))
             cmd.append(f"--volume={vol}")
+            if profile.get("audio_boost", True):
+                cmd.append("--af=lavfi=[dynaudnorm=f=200:g=15:p=0.95]")
 
         # Configuración de decodificación y renderizado para Raspberry Pi 5 (H.265 / HEVC)
         # Nota: '--hwdec=auto-safe' elige 'drm' zero-copy (formato SAND128), lo cual en el
@@ -274,7 +277,11 @@ class MPVController:
             self.seek(target)
 
     def set_volume(self, volume: int):
-        self.send_command(["set_property", "volume", max(0, min(100, int(volume)))])
+        self.send_command(["set_property", "volume", max(0, min(300, int(volume)))])
+
+    def set_audio_boost(self, enabled: bool):
+        af_val = "lavfi=[dynaudnorm=f=200:g=15:p=0.95]" if enabled else ""
+        self.send_command(["set_property", "af", af_val])
 
     def load_file(self, file_path: str):
         self._current_file = file_path

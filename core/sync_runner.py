@@ -7,17 +7,31 @@ import os
 import sys
 import time
 import signal
+import shutil
+import subprocess
 from typing import Optional
 
 from core.profile_manager import ProfileManager
 from core.mpv_controller import MPVController
+from core.autostart import build_vlc_args, ensure_system_volume_max
 from core.osc_receiver import OSCReceiver
 from core.osc_broadcaster import OSCBroadcaster
+
+def _resolve_vlc_binary() -> str:
+    if shutil.which("cvlc"):
+        return "cvlc"
+    if shutil.which("vlc"):
+        return "vlc"
+    mac_vlc = "/Applications/VLC.app/Contents/MacOS/VLC"
+    if os.path.exists(mac_vlc):
+        return mac_vlc
+    return "cvlc"
 
 class SyncDaemon:
     def __init__(self, profile_manager: Optional[ProfileManager] = None):
         self.pm = profile_manager or ProfileManager()
         self.mpv = MPVController()
+        self.vlc_process: Optional[subprocess.Popen] = None
         self.osc_recv: Optional[OSCReceiver] = None
         self.osc_broad: Optional[OSCBroadcaster] = None
         self.is_running = False
@@ -29,13 +43,29 @@ class SyncDaemon:
             return
 
         role = prof.get("network_role", "follower")
+        engine = prof.get("player_engine", "mpv")
         port = int(prof.get("osc_port", 9000))
         broadcast_ip = prof.get("osc_broadcast_ip", "255.255.255.255")
         mappings = prof.get("osc_mappings", {})
 
-        print(f"Iniciando SyncDaemon con perfil '{prof['name']}' (Rol: {role.upper()}, Puerto: {port})")
+        # Asegurar el volumen maestro de la Raspberry Pi al 100% antes de reproducir
+        if not prof.get("no_audio", False):
+            ensure_system_volume_max()
 
-        # 1. Iniciar MPV
+        print(f"Iniciando SyncDaemon con perfil '{prof['name']}' (Rol: {role.upper()}, Motor: {engine.upper()}, Puerto: {port})")
+
+        # 1. Iniciar reproductor según rol y motor elegido
+        if role == "standalone" and engine == "vlc":
+            vlc_bin = _resolve_vlc_binary()
+            vlc_args = build_vlc_args(prof, binary=vlc_bin)
+            self.vlc_process = subprocess.Popen(
+                vlc_args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            self.is_running = True
+            return
+
         self.mpv.launch(prof)
         self.is_running = True
 
@@ -106,6 +136,16 @@ class SyncDaemon:
         if self.osc_broad:
             self.osc_broad.close()
             self.osc_broad = None
+        if self.vlc_process:
+            try:
+                self.vlc_process.terminate()
+                self.vlc_process.wait(timeout=1.0)
+            except Exception:
+                try:
+                    self.vlc_process.kill()
+                except Exception:
+                    pass
+            self.vlc_process = None
         self.mpv.terminate()
 
 def run_daemon_cli():

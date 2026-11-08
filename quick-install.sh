@@ -2,14 +2,14 @@
 # ========================================================
 # Instalador rápido vía One-Liner para Raspberry Pi 5 (Sync & OSC)
 # Uso:
-#   curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/sync-osc/quick-install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash
 # ========================================================
 
 set -e
 
 TARGET_DIR="$HOME/vlc-autoplay-studio"
 REPO_URL="https://github.com/chuledp/pi5_KIOSK_ANDREANI.git"
-BRANCH="sync-osc"
+BRANCH="main"
 
 echo "=== Instalador Rápido AutoPlay Studio (Sync & OSC) ==="
 

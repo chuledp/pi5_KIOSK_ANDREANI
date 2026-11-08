@@ -63,6 +63,13 @@ class TestVLCAutoPlayCore(unittest.TestCase):
         self.assertIn("--gain=0.75", cmd)
         self.assertIn('"/home/pi/Videos/loop.mp4"', cmd)
 
+        # Test boosted volume (e.g. 250%) with compressor/limiter
+        profile["volume"] = 250
+        profile["audio_boost"] = True
+        cmd_boost = build_vlc_command(profile, binary="cvlc")
+        self.assertIn("--gain=2.50", cmd_boost)
+        self.assertIn("--audio-filter=compressor", cmd_boost)
+
     def test_autostart_manager(self):
         am = AutostartManager(
             autostart_path=self.autostart_file,

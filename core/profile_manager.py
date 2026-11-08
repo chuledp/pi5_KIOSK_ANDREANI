@@ -28,7 +28,8 @@ def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
         "hide_osd": True,
         "hide_mouse": True,
         "no_audio": False,
-        "volume": 100,
+        "volume": 150,
+        "audio_boost": True,
         "delay_seconds": 5,
         "extra_args": "",
         "player_engine": "mpv",  # "mpv" o "vlc"
@@ -64,6 +65,8 @@ class ProfileManager:
                             p["player_engine"] = "mpv"
                         if "hwdec_mode" not in p:
                             p["hwdec_mode"] = "drm-copy"
+                        if "audio_boost" not in p:
+                            p["audio_boost"] = True
                         if "network_role" not in p:
                             p["network_role"] = "standalone"
                         if "osc_port" not in p:
