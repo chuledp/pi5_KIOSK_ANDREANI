@@ -1,16 +1,27 @@
-# 🎬 AutoPlay Studio • Sync & OSC (Raspberry Pi 5)
+# 🎬 AutoPlay Studio • DUAL OPTOMA (2 Salidas HDMI Espejadas) + Sync & OSC
 
-> ### ⚡ Instalación Rápida (Pegar en la terminal de la Raspberry Pi):
+> ### ⚡ Instalación Rápida de la rama DUAL-OPTOMA (Pegar en la terminal de la Raspberry Pi 5):
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash
+> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/DUAL-OPTOMA/quick-install.sh | bash
 > ```
-> *(Instala dependencias: MPV, VLC, Python Tkinter, y crea el acceso directo en el Escritorio)*
+> *(Instala dependencias: MPV, VLC, `wlr-randr`, `xrandr`, fuerza `vc4.force_hotplug=3` para ambos conectores micro-HDMI, y crea el acceso directo en el Escritorio)*
 
 ---
 
-**AutoPlay Studio (Sync & OSC)** es una aplicación visual para **Raspberry Pi OS (Debian 12 Bookworm)** diseñada para montajes de arte, exposiciones interactivas y espectáculos multimedia. 
+**AutoPlay Studio (DUAL OPTOMA Edition)** es la versión de **AutoPlay Studio** configurada especialmente para usar **las dos salidas micro-HDMI (`HDMI-A-1` y `HDMI-A-2`) activas al mismo tiempo** en una **Raspberry Pi 5** conectada a **dos proyectores Optoma** mostrando exactamente la misma información.
 
-Permite reproducir videos y audios automáticamente al encender la Pi, **sincronizar múltiples Raspberry Pis entre sí por red local** y recibir disparos/cues en tiempo real vía **OSC (Open Sound Control)** desde **TouchDesigner**, **Resolume Arena**, **Reaper**, etc.
+---
+
+## 📽️ Doble Salida HDMI Espejada (`HDMI-A-1` + `HDMI-A-2`)
+
+En Raspberry Pi OS (Debian Bookworm con Wayland `labwc`/`wayfire` o X11):
+1. **Espejado de Hardware Wayland / X11 (`mirror`, recomendado)**:
+   - Activa automáticamente las salidas `HDMI-A-1` y `HDMI-A-2` y posiciona ambos viewports en la coordenada `0,0` (`wlr-randr --output HDMI-A-1 --on --pos 0,0 --output HDMI-A-2 --on --pos 0,0` y `xrandr --output HDMI-A-2 --same-as HDMI-A-1`).
+   - El reproductor decodifica el video **una sola vez** y el compositor DRM/KMS envía exactamente el mismo cuadro simultáneamente a ambos proyectores Optoma sin sobrecargar la GPU ni perder sincronía.
+2. **Doble Reproductor MPV (`dual_mpv`, alternativo)**:
+   - Coloca `HDMI-A-1` en `0,0` y `HDMI-A-2` en `1920,0`, y lanza dos instancias de MPV a pantalla completa (`--screen=0` y `--screen=1`) sincronizadas por doble socket IPC (`/tmp/mpv-autoplay-socket` y `/tmp/mpv-autoplay-socket-hdmi2`).
+3. **Encendido Forzado en Boot (`vc4.force_hotplug=3`)**:
+   - El instalador agrega `vc4.force_hotplug=3` en `/boot/firmware/cmdline.txt` para que la Raspberry Pi 5 mantenga ambas salidas HDMI encendidas al arrancar aunque los proyectores Optoma tarden unos segundos más en encender la lámpara/láser.
 
 ---
 

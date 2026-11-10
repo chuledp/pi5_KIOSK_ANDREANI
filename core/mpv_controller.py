@@ -13,6 +13,8 @@ import threading
 import subprocess
 from typing import Optional, Dict, Any, List
 
+from core.dual_display import enable_dual_hdmi_mirror
+
 DEFAULT_SOCKET_PATH = "/tmp/mpv-autoplay-socket"
 DEFAULT_LOG_PATH = "/tmp/mpv-autoplay.log"
 
@@ -31,9 +33,12 @@ HWDEC_ERROR_PATTERNS = (
 class MPVController:
     def __init__(self, socket_path: str = DEFAULT_SOCKET_PATH, log_path: str = DEFAULT_LOG_PATH):
         self.socket_path = socket_path
+        self.secondary_socket_path = f"{socket_path}-hdmi2"
         self.log_path = log_path
         self.process: Optional[subprocess.Popen] = None
+        self.secondary_process: Optional[subprocess.Popen] = None
         self._sock: Optional[socket.socket] = None
+        self._secondary_sock: Optional[socket.socket] = None
         self._request_id = 1
         self._current_file: str = ""
         self._fallback_triggered: bool = False
@@ -45,11 +50,14 @@ class MPVController:
         return os.path.exists(self.socket_path)
 
     def launch(self, profile: Dict[str, Any], binary: str = "mpv") -> bool:
-        """Inicia el proceso MPV en modo kiosk con socket IPC activado."""
+        """Inicia el proceso MPV en modo kiosk con socket IPC activado (y soporte Dual HDMI Optoma)."""
         self.terminate()
 
-        # Limpiar socket y log previos si existen
-        for path in (self.socket_path, self.log_path):
+        # Configurar ambas salidas HDMI (HDMI-A-1 y HDMI-A-2) antes de abrir MPV
+        enable_dual_hdmi_mirror(profile)
+
+        # Limpiar sockets y logs previos si existen
+        for path in (self.socket_path, self.secondary_socket_path, self.log_path):
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -144,18 +152,45 @@ class MPVController:
             except Exception:
                 cmd.append(extra)
 
+        dual_enabled = bool(profile.get("dual_hdmi_enabled", True))
+        dual_mode = profile.get("dual_hdmi_mode", "mirror")
+
         file_path = profile.get("file_path", "").strip()
         self._current_file = file_path
         self._fallback_triggered = (hwdec_mode == "no")
+
+        primary_cmd = list(cmd)
+        if dual_enabled and dual_mode == "dual_mpv":
+            primary_cmd.extend(["--screen=0", "--fs-screen=0"])
         if file_path:
-            cmd.append(file_path)
+            primary_cmd.append(file_path)
 
         try:
             self.process = subprocess.Popen(
-                cmd,
+                primary_cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
+
+            # Si está en modo Doble Ventana (dual_mpv), lanzar un segundo MPV sincronizado en HDMI-2 (Screen 1)
+            if dual_enabled and dual_mode == "dual_mpv":
+                sec_cmd = [
+                    arg if not arg.startswith("--input-ipc-server=") else f"--input-ipc-server={self.secondary_socket_path}"
+                    for arg in cmd
+                    if not arg.startswith("--log-file=") and not arg.startswith("--volume=") and not arg.startswith("--af=")
+                ]
+                sec_cmd.extend(["--mute=yes", "--screen=1", "--fs-screen=1"])
+                if file_path:
+                    sec_cmd.append(file_path)
+                try:
+                    self.secondary_process = subprocess.Popen(
+                        sec_cmd,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                except Exception as sec_err:
+                    print(f"Nota lanzando MPV secundario (HDMI 2): {sec_err}")
+
             # Esperar a que el socket esté disponible
             for _ in range(30):
                 time.sleep(0.1)
@@ -221,8 +256,34 @@ class MPVController:
             self._sock = None
             return False
 
+    def _send_to_secondary(self, command: List[Any]) -> None:
+        """Reenvía comandos de transporte al segundo reproductor MPV (HDMI-2) si está activo."""
+        if not os.path.exists(self.secondary_socket_path):
+            return
+        try:
+            if not self._secondary_sock:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.connect(self.secondary_socket_path)
+                s.settimeout(0.2)
+                self._secondary_sock = s
+            req = {"command": command, "request_id": self._request_id}
+            self._secondary_sock.sendall((json.dumps(req) + "\n").encode("utf-8"))
+        except Exception:
+            if self._secondary_sock:
+                try:
+                    self._secondary_sock.close()
+                except Exception:
+                    pass
+                self._secondary_sock = None
+
     def send_command(self, command: List[Any]) -> Optional[Dict[str, Any]]:
-        """Envía un comando JSON por el socket IPC de MPV."""
+        """Envía un comando JSON por el socket IPC de MPV (y lo replica en HDMI-2 si usa dual_mpv)."""
+        if command and (
+            command[0] in ("loadfile", "quit")
+            or (len(command) >= 2 and command[0] == "set_property" and command[1] in ("pause", "time-pos", "speed", "hwdec"))
+        ):
+            self._send_to_secondary(command)
+
         if not self._ensure_socket():
             return None
         try:
@@ -330,7 +391,7 @@ class MPVController:
             self.set_speed(1.0)
 
     def terminate(self):
-        """Cierra la conexión al socket y termina el proceso MPV."""
+        """Cierra la conexión al socket y termina el proceso MPV (principal y secundario)."""
         if self._sock:
             try:
                 self.send_command(["quit"])
@@ -339,19 +400,29 @@ class MPVController:
                 pass
             self._sock = None
 
-        if self.process:
+        if self._secondary_sock:
             try:
-                self.process.terminate()
-                self.process.wait(timeout=1.0)
-            except Exception:
-                try:
-                    self.process.kill()
-                except Exception:
-                    pass
-            self.process = None
-
-        if os.path.exists(self.socket_path):
-            try:
-                os.remove(self.socket_path)
+                self._secondary_sock.close()
             except Exception:
                 pass
+            self._secondary_sock = None
+
+        for proc in (self.process, self.secondary_process):
+            if proc:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+        self.process = None
+        self.secondary_process = None
+
+        for spath in (self.socket_path, self.secondary_socket_path):
+            if os.path.exists(spath):
+                try:
+                    os.remove(spath)
+                except Exception:
+                    pass

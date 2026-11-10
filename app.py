@@ -17,6 +17,7 @@ from typing import Optional, Dict, Any
 
 from core.profile_manager import ProfileManager, DEFAULT_OSC_MAPPINGS
 from core.autostart import AutostartManager, build_vlc_command
+from core.dual_display import detect_hdmi_outputs, enable_dual_hdmi_mirror
 from core.sync_runner import SyncDaemon
 from core.osc_receiver import OSCReceiver
 
@@ -33,6 +34,7 @@ THEME = {
     "danger": "#ef4444",
     "danger_hover": "#dc2626",
     "purple": "#8b5cf6",
+    "teal": "#14b8a6",
     "amber": "#f59e0b",
     "text": "#f9fafb",
     "text_muted": "#9ca3af",
@@ -49,9 +51,9 @@ class VLCAutoPlayApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("AutoPlay Studio - Kiosk, Red & OSC (Raspberry Pi 5)")
-        self.geometry("1020x780")
-        self.minsize(920, 680)
+        self.title("AutoPlay Studio - Dual Optoma HDMI + Sync & OSC (Raspberry Pi 5)")
+        self.geometry("1040x820")
+        self.minsize(920, 720)
         self.configure(bg=THEME["bg"])
 
         # Inicializar managers
@@ -74,6 +76,8 @@ class VLCAutoPlayApp(tk.Tk):
         active_prof = self.profile_mgr.get_active_profile()
         if active_prof:
             self.select_profile(active_prof["id"])
+            if active_prof.get("dual_hdmi_enabled", True):
+                enable_dual_hdmi_mirror(active_prof)
 
         self.update_autostart_badge()
         self._start_live_osc_listener()
@@ -109,12 +113,12 @@ class VLCAutoPlayApp(tk.Tk):
         title_box = tk.Frame(header_frame, bg=THEME["surface"])
         title_box.pack(side=tk.LEFT)
 
-        lbl_title = ttk.Label(title_box, text="🎬 AutoPlay Studio • Sync & OSC", style="Title.TLabel")
+        lbl_title = ttk.Label(title_box, text="🎬 AutoPlay Studio • Dual Optoma HDMI + Sync & OSC", style="Title.TLabel")
         lbl_title.pack(anchor="w")
 
         lbl_sub = ttk.Label(
             title_box,
-            text="Kiosk de Video/Audio con Sincronización por Red y Cues OSC (TouchDesigner, Resolume, Reaper)",
+            text="Kiosk con Doble Salida HDMI Espejada (HDMI 1 + HDMI 2) + Sincronización por Red y Cues OSC",
             style="Subtitle.TLabel"
         )
         lbl_sub.pack(anchor="w", pady=(2, 0))
@@ -398,6 +402,9 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_hide_mouse = tk.BooleanVar(value=True)
         self.var_no_audio = tk.BooleanVar(value=False)
         self.var_audio_boost = tk.BooleanVar(value=True)
+        self.var_dual_hdmi = tk.BooleanVar(value=True)
+        self.var_dual_mode = tk.StringVar(value="mirror")
+        self.var_dual_res = tk.StringVar(value="auto")
         self.var_delay = tk.IntVar(value=5)
         self.var_volume = tk.IntVar(value=150)
 
@@ -410,7 +417,7 @@ class VLCAutoPlayApp(tk.Tk):
         cb2 = ttk.Checkbutton(chk_grid, text="Pantalla completa", variable=self.var_fullscreen, command=self.save_current_settings, style="Card.TCheckbutton")
         cb2.grid(row=0, column=1, sticky="w", padx=(0, 20), pady=2)
 
-        cb5 = ttk.Checkbutton(chk_grid, text="🔊 Boost + Limitador (Anti-saturación)", variable=self.var_audio_boost, command=self._on_audio_boost_toggle, style="Card.TCheckbutton")
+        cb5 = ttk.Checkbutton(chk_grid, text="🔊 Boost + Limitador", variable=self.var_audio_boost, command=self._on_audio_boost_toggle, style="Card.TCheckbutton")
         cb5.grid(row=0, column=2, sticky="w", pady=2)
 
         cb3 = ttk.Checkbutton(chk_grid, text="Ocultar título / OSD", variable=self.var_hide_osd, command=self.save_current_settings, style="Card.TCheckbutton")
@@ -418,6 +425,58 @@ class VLCAutoPlayApp(tk.Tk):
 
         cb4 = ttk.Checkbutton(chk_grid, text="Ocultar cursor mouse", variable=self.var_hide_mouse, command=self.save_current_settings, style="Card.TCheckbutton")
         cb4.grid(row=1, column=1, sticky="w", padx=(0, 20), pady=2)
+
+        cb6 = ttk.Checkbutton(chk_grid, text="📽️ 2 Salidas HDMI (Dual Optoma)", variable=self.var_dual_hdmi, command=self._on_dual_hdmi_toggle, style="Card.TCheckbutton")
+        cb6.grid(row=1, column=2, sticky="w", pady=2)
+
+        # Opciones Dual HDMI Optoma
+        self.dual_hdmi_frame = tk.Frame(card_opts, bg=THEME["card"])
+        self.dual_hdmi_frame.pack(fill=tk.X, pady=(2, 6))
+
+        tk.Label(self.dual_hdmi_frame, text="Modo Dual:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.combo_dual_mode = ttk.Combobox(
+            self.dual_hdmi_frame,
+            values=["mirror", "dual_mpv"],
+            width=9,
+            state="readonly",
+            textvariable=self.var_dual_mode
+        )
+        self.combo_dual_mode.pack(side=tk.LEFT, padx=(0, 10))
+        self.combo_dual_mode.bind("<<ComboboxSelected>>", self.save_current_settings)
+
+        tk.Label(self.dual_hdmi_frame, text="Resolución:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.combo_dual_res = ttk.Combobox(
+            self.dual_hdmi_frame,
+            values=["auto", "1920x1080", "1280x800", "1280x720"],
+            width=9,
+            state="readonly",
+            textvariable=self.var_dual_res
+        )
+        self.combo_dual_res.pack(side=tk.LEFT, padx=(0, 10))
+        self.combo_dual_res.bind("<<ComboboxSelected>>", self.save_current_settings)
+
+        self.btn_detect_hdmi = tk.Button(
+            self.dual_hdmi_frame,
+            text="🔄 Detectar / Forzar Espejo",
+            command=self.action_force_hdmi_mirror,
+            bg=THEME["card_border"],
+            fg=THEME["text"],
+            relief="flat",
+            font=("Helvetica", 8, "bold"),
+            cursor="hand2",
+            padx=6,
+            pady=1
+        )
+        self.btn_detect_hdmi.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.lbl_hdmi_status = tk.Label(
+            self.dual_hdmi_frame,
+            text="HDMI 1+2",
+            bg=THEME["card"],
+            fg=THEME["teal"],
+            font=("Helvetica", 8, "bold")
+        )
+        self.lbl_hdmi_status.pack(side=tk.LEFT)
 
         # Sliders
         slider_frame = tk.Frame(card_opts, bg=THEME["card"])
@@ -549,6 +608,19 @@ class VLCAutoPlayApp(tk.Tk):
         if self.active_daemon and self.active_daemon.mpv.is_running():
             self.active_daemon.mpv.set_audio_boost(self.var_audio_boost.get())
 
+    def _on_dual_hdmi_toggle(self):
+        self.save_current_settings()
+        if self.var_dual_hdmi.get():
+            self.action_force_hdmi_mirror()
+
+    def action_force_hdmi_mirror(self):
+        prof = self.profile_mgr.get_profile(self.current_profile_id) if self.current_profile_id else {}
+        ok, msg = enable_dual_hdmi_mirror(prof)
+        st = detect_hdmi_outputs()
+        if hasattr(self, "lbl_hdmi_status"):
+            self.lbl_hdmi_status.config(text=st["summary"])
+        self.set_status(msg)
+
     def on_role_change(self):
         role = self.var_network_role.get()
         if role == "master":
@@ -606,6 +678,13 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_hide_mouse.set(prof.get("hide_mouse", True))
         self.var_no_audio.set(prof.get("no_audio", False))
         self.var_audio_boost.set(prof.get("audio_boost", True))
+        self.var_dual_hdmi.set(prof.get("dual_hdmi_enabled", True))
+        self.var_dual_mode.set(prof.get("dual_hdmi_mode", "mirror"))
+        self.var_dual_res.set(prof.get("dual_hdmi_resolution", "auto"))
+
+        st = detect_hdmi_outputs()
+        if hasattr(self, "lbl_hdmi_status"):
+            self.lbl_hdmi_status.config(text=st["summary"])
 
         delay = prof.get("delay_seconds", 5)
         self.var_delay.set(delay)
@@ -666,6 +745,9 @@ class VLCAutoPlayApp(tk.Tk):
             "hide_mouse": self.var_hide_mouse.get(),
             "no_audio": self.var_no_audio.get(),
             "audio_boost": self.var_audio_boost.get(),
+            "dual_hdmi_enabled": self.var_dual_hdmi.get(),
+            "dual_hdmi_mode": self.var_dual_mode.get(),
+            "dual_hdmi_resolution": self.var_dual_res.get(),
             "delay_seconds": int(self.var_delay.get()),
             "volume": int(self.var_volume.get())
         }

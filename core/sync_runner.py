@@ -14,6 +14,7 @@ from typing import Optional
 from core.profile_manager import ProfileManager
 from core.mpv_controller import MPVController
 from core.autostart import build_vlc_args, ensure_system_volume_max
+from core.dual_display import enable_dual_hdmi_mirror
 from core.osc_receiver import OSCReceiver
 from core.osc_broadcaster import OSCBroadcaster
 
@@ -51,6 +52,9 @@ class SyncDaemon:
         # Asegurar el volumen maestro de la Raspberry Pi al 100% antes de reproducir
         if not prof.get("no_audio", False):
             ensure_system_volume_max()
+
+        # Asegurar que ambas salidas HDMI (HDMI-A-1 y HDMI-A-2) estén encendidas y espejadas
+        enable_dual_hdmi_mirror(prof)
 
         print(f"Iniciando SyncDaemon con perfil '{prof['name']}' (Rol: {role.upper()}, Motor: {engine.upper()}, Puerto: {port})")
 

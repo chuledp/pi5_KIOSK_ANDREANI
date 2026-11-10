@@ -30,6 +30,9 @@ def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
         "no_audio": False,
         "volume": 150,
         "audio_boost": True,
+        "dual_hdmi_enabled": True,
+        "dual_hdmi_mode": "mirror",  # "mirror" (0,0 clonado) o "dual_mpv" (2 ventanas en pantalla 0 y 1)
+        "dual_hdmi_resolution": "auto",  # "auto", "1920x1080", "1280x800", "1280x720"
         "delay_seconds": 5,
         "extra_args": "",
         "player_engine": "mpv",  # "mpv" o "vlc"
@@ -67,6 +70,12 @@ class ProfileManager:
                             p["hwdec_mode"] = "drm-copy"
                         if "audio_boost" not in p:
                             p["audio_boost"] = True
+                        if "dual_hdmi_enabled" not in p:
+                            p["dual_hdmi_enabled"] = True
+                        if "dual_hdmi_mode" not in p:
+                            p["dual_hdmi_mode"] = "mirror"
+                        if "dual_hdmi_resolution" not in p:
+                            p["dual_hdmi_resolution"] = "auto"
                         if "network_role" not in p:
                             p["network_role"] = "standalone"
                         if "osc_port" not in p:

@@ -4,6 +4,7 @@ import stat
 import shutil
 import subprocess
 from typing import Dict, Any, Optional, List
+from core.dual_display import build_dual_hdmi_shell_snippet
 
 DEFAULT_AUTOSTART_DIR = os.path.expanduser("~/.config/autostart")
 DEFAULT_AUTOSTART_DESKTOP = os.path.join(DEFAULT_AUTOSTART_DIR, "vlc-autoplay.desktop")
@@ -130,6 +131,7 @@ class AutostartManager:
             profile_id = profile.get("id", "")
 
             vlc_cmd = build_vlc_command(profile, binary="cvlc")
+            dual_hdmi_snippet = build_dual_hdmi_shell_snippet(profile)
 
             runner_content = f"""#!/usr/bin/env bash
 # ========================================================
@@ -145,7 +147,7 @@ sleep {delay}
 if command -v xset >/dev/null 2>&1; then
     xset s off -dpms || true
 fi
-
+{dual_hdmi_snippet}
 # Forzar el volumen maestro del sistema (PipeWire / PulseAudio / ALSA) al 100% y sin mute
 if command -v wpctl >/dev/null 2>&1; then
     wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 2>/dev/null || true
