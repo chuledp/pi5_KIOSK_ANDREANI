@@ -14,16 +14,29 @@ import subprocess
 from typing import Dict, Any, Tuple, List, Optional
 
 
+def _read_sysfs(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read().strip()
+    except Exception:
+        return ""
+
+
 def detect_hdmi_outputs() -> Dict[str, Any]:
     """
-    Detecta el estado de las dos salidas HDMI de la Raspberry Pi 5 (HDMI-A-1 y HDMI-A-2)
-    leyendo /sys/class/drm/card*-HDMI-A-*/status.
+    Detecta el estado de las dos salidas HDMI de la Raspberry Pi 5 (HDMI-A-1 y HDMI-A-2),
+    incluyendo si están conectadas y qué resolución activa tienen configurada en el DRM/KMS.
     """
     status = {
         "hdmi1_connected": False,
         "hdmi2_connected": False,
         "hdmi1_name": "HDMI-A-1",
         "hdmi2_name": "HDMI-A-2",
+        "hdmi1_mode": "",
+        "hdmi2_mode": "",
+        "hdmi1_modes": [],
+        "hdmi2_modes": [],
+        "common_resolution": "1920x1080",
         "summary": "HDMI 1+2 (Modo Dual)"
     }
 
@@ -31,20 +44,38 @@ def detect_hdmi_outputs() -> Dict[str, Any]:
         return status
 
     try:
-        for path in sorted(glob.glob("/sys/class/drm/card*-HDMI-A-*/status")):
-            try:
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    st = f.read().strip().lower()
-                if "hdmi-a-1" in path.lower():
-                    status["hdmi1_connected"] = (st == "connected")
-                elif "hdmi-a-2" in path.lower():
-                    status["hdmi2_connected"] = (st == "connected")
-            except Exception:
-                pass
+        for status_path in sorted(glob.glob("/sys/class/drm/card*-HDMI-A-*/status")):
+            base_dir = os.path.dirname(status_path)
+            st = _read_sysfs(status_path).lower()
+            current_mode = _read_sysfs(os.path.join(base_dir, "mode"))
+            modes_raw = _read_sysfs(os.path.join(base_dir, "modes"))
+            modes_list = [m.strip() for m in modes_raw.splitlines() if m.strip()]
 
-        h1 = "ON" if status["hdmi1_connected"] else "Wait"
-        h2 = "ON" if status["hdmi2_connected"] else "Wait"
-        status["summary"] = f"HDMI-1 [{h1}] | HDMI-2 [{h2}]"
+            if "hdmi-a-1" in status_path.lower():
+                status["hdmi1_connected"] = (st == "connected")
+                status["hdmi1_mode"] = current_mode
+                status["hdmi1_modes"] = modes_list
+            elif "hdmi-a-2" in status_path.lower():
+                status["hdmi2_connected"] = (st == "connected")
+                status["hdmi2_mode"] = current_mode
+                status["hdmi2_modes"] = modes_list
+
+        # Buscar mejor resolución común entre ambos proyectores (ej: 1920x1080, 1280x800, 1280x720)
+        if status["hdmi1_modes"] and status["hdmi2_modes"]:
+            common = [m for m in status["hdmi1_modes"] if m in status["hdmi2_modes"]]
+            if common:
+                status["common_resolution"] = common[0]
+
+        h1_txt = status["hdmi1_mode"] or ("ON" if status["hdmi1_connected"] else "Wait")
+        h2_txt = status["hdmi2_mode"] or ("ON" if status["hdmi2_connected"] else "Wait")
+
+        if status["hdmi1_connected"] and status["hdmi2_connected"]:
+            if status["hdmi1_mode"] and status["hdmi2_mode"] and status["hdmi1_mode"] != status["hdmi2_mode"]:
+                status["summary"] = f"HDMI-1 [{h1_txt}] | HDMI-2 [{h2_txt}] ⚠️ Diferentes!"
+            else:
+                status["summary"] = f"HDMI-1 [{h1_txt}] | HDMI-2 [{h2_txt}] ✓ Espejo OK"
+        else:
+            status["summary"] = f"HDMI-1 [{h1_txt}] | HDMI-2 [{h2_txt}]"
     except Exception:
         pass
 
@@ -113,22 +144,27 @@ def enable_dual_hdmi_mirror(profile: Optional[Dict[str, Any]] = None) -> Tuple[b
     resolution = prof.get("dual_hdmi_resolution", "auto")
     is_mirror = (dual_mode == "mirror")
 
+    st = detect_hdmi_outputs()
+    target_res = resolution
+    if target_res == "auto":
+        # Usar la mejor resolución común detectada entre ambos Optoma para que coincidan 100%
+        target_res = st.get("common_resolution", "1920x1080")
+
     if not sys.platform.startswith("linux"):
-        return True, f"Modo Dual Optoma ({dual_mode.upper()}, res: {resolution}) listo (se aplicará en la Raspberry Pi)."
+        return True, f"Modo Dual Optoma ({dual_mode.upper()}, res: {target_res}) listo (se aplicará en la Raspberry Pi)."
 
     applied_methods: List[str] = []
-    width = int(resolution.split("x")[0]) if "x" in resolution else 1920
+    width = int(target_res.split("x")[0]) if "x" in target_res else 1920
     pos_hdmi2_wlr = "0,0" if is_mirror else f"{width},0"
     pos_hdmi2_x11 = "0x0" if is_mirror else f"{width}x0"
 
     # 1. Wayland (labwc / wayfire) vía wlr-randr
     if shutil.which("wlr-randr"):
         for out1, out2 in (("HDMI-A-1", "HDMI-A-2"), ("HDMI-1", "HDMI-2")):
-            # Encender cada salida individualmente primero (por si una sola está conectada o encendiendo)
             for out_name, pos_val in ((out1, "0,0"), (out2, pos_hdmi2_wlr)):
                 cmd_single = ["wlr-randr", "--output", out_name, "--on", "--pos", pos_val]
-                if resolution != "auto":
-                    cmd_single.extend(["--mode", resolution])
+                if target_res:
+                    cmd_single.extend(["--mode", target_res])
                 try:
                     r = subprocess.run(
                         cmd_single,
@@ -137,41 +173,28 @@ def enable_dual_hdmi_mirror(profile: Optional[Dict[str, Any]] = None) -> Tuple[b
                         text=True,
                         timeout=2.5
                     )
-                    if r.returncode == 0 and f"wlr-randr ({out_name})" not in applied_methods:
-                        applied_methods.append(f"wlr-randr ({out_name}@{pos_val})")
-                except Exception:
-                    pass
-
-            # También intentar comando combinado sin forzar --mode si el modo específico no existiera en EDID
-            if resolution != "auto":
-                for out_name, pos_val in ((out1, "0,0"), (out2, pos_hdmi2_wlr)):
-                    try:
+                    if r.returncode == 0:
+                        applied_methods.append(f"wlr-randr ({out_name}@{target_res})")
+                    else:
+                        # Fallback sin --mode sólo si el proyector rechazó la resolución solicitada
                         subprocess.run(
                             ["wlr-randr", "--output", out_name, "--on", "--pos", pos_val],
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL,
                             timeout=2.0
                         )
-                    except Exception:
-                        pass
+                except Exception:
+                    pass
 
     # 2. Actualizar wayfire.ini si existe
-    _update_wayfire_ini_mirror(resolution=resolution, mirror=is_mirror)
+    _update_wayfire_ini_mirror(resolution=target_res, mirror=is_mirror)
 
     # 3. X11 vía xrandr
     if shutil.which("xrandr"):
         for out1, out2 in (("HDMI-1", "HDMI-2"), ("HDMI-A-1", "HDMI-A-2")):
-            cmd_x = ["xrandr", "--output", out1, "--auto", "--pos", "0x0", "--output", out2, "--auto", "--pos", pos_hdmi2_x11]
+            cmd_x = ["xrandr", "--output", out1, "--mode", target_res, "--pos", "0x0", "--output", out2, "--mode", target_res, "--pos", pos_hdmi2_x11]
             if is_mirror:
                 cmd_x.extend(["--same-as", out1])
-            if resolution != "auto":
-                cmd_x = [
-                    "xrandr",
-                    "--output", out1, "--mode", resolution, "--pos", "0x0",
-                    "--output", out2, "--mode", resolution, "--pos", pos_hdmi2_x11
-                ]
-                if is_mirror:
-                    cmd_x.extend(["--same-as", out1])
             try:
                 r = subprocess.run(
                     cmd_x,
@@ -181,15 +204,23 @@ def enable_dual_hdmi_mirror(profile: Optional[Dict[str, Any]] = None) -> Tuple[b
                     timeout=2.5
                 )
                 if r.returncode == 0:
-                    applied_methods.append(f"xrandr ({out1}+{out2})")
+                    applied_methods.append(f"xrandr ({out1}+{out2}@{target_res})")
                     break
+                else:
+                    # Fallback auto
+                    subprocess.run(
+                        ["xrandr", "--output", out1, "--auto", "--pos", "0x0", "--output", out2, "--auto", "--pos", pos_hdmi2_x11],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=2.0
+                    )
             except Exception:
                 pass
 
     st = detect_hdmi_outputs()
     if applied_methods:
-        return True, f"Dual HDMI activo [{', '.join(applied_methods)}] • {st['summary']}"
-    return True, f"Configuración Dual HDMI preparada ({st['summary']})."
+        return True, f"Dual HDMI activo ({target_res}) [{', '.join(applied_methods)}] • {st['summary']}"
+    return True, f"Configuración Dual HDMI preparada ({target_res}) ({st['summary']})."
 
 
 def build_dual_hdmi_shell_snippet(profile: Dict[str, Any]) -> str:
@@ -203,20 +234,21 @@ def build_dual_hdmi_shell_snippet(profile: Dict[str, Any]) -> str:
     dual_mode = profile.get("dual_hdmi_mode", "mirror")
     resolution = profile.get("dual_hdmi_resolution", "auto")
     is_mirror = (dual_mode == "mirror")
-    width = int(resolution.split("x")[0]) if "x" in resolution else 1920
+    res_target = resolution if resolution != "auto" else "1920x1080"
+    width = int(res_target.split("x")[0]) if "x" in res_target else 1920
     pos_wlr = "0,0" if is_mirror else f"{width},0"
     pos_x11 = "0x0" if is_mirror else f"{width}x0"
     same_as_flag = "--same-as HDMI-1" if is_mirror else ""
     same_as_flag_a = "--same-as HDMI-A-1" if is_mirror else ""
-    mode_wlr = f"--mode {resolution}" if resolution != "auto" else ""
+    mode_wlr = f"--mode {res_target}"
 
-    return f"""# Habilitar las 2 salidas HDMI (Dual Optoma: HDMI-A-1 y HDMI-A-2)
+    return f"""# Habilitar las 2 salidas HDMI forzando idéntica resolución (Dual Optoma: HDMI-A-1 y HDMI-A-2)
 if command -v wlr-randr >/dev/null 2>&1; then
     wlr-randr --output HDMI-A-1 --on --pos 0,0 {mode_wlr} 2>/dev/null || wlr-randr --output HDMI-A-1 --on --pos 0,0 2>/dev/null || true
     wlr-randr --output HDMI-A-2 --on --pos {pos_wlr} {mode_wlr} 2>/dev/null || wlr-randr --output HDMI-A-2 --on --pos {pos_wlr} 2>/dev/null || true
 fi
 if command -v xrandr >/dev/null 2>&1; then
-    xrandr --output HDMI-1 --auto --pos 0x0 --output HDMI-2 --auto --pos {pos_x11} {same_as_flag} 2>/dev/null || true
-    xrandr --output HDMI-A-1 --auto --pos 0x0 --output HDMI-A-2 --auto --pos {pos_x11} {same_as_flag_a} 2>/dev/null || true
+    xrandr --output HDMI-1 --mode {res_target} --pos 0x0 --output HDMI-2 --mode {res_target} --pos {pos_x11} {same_as_flag} 2>/dev/null || xrandr --output HDMI-1 --auto --pos 0x0 --output HDMI-2 --auto --pos {pos_x11} {same_as_flag} 2>/dev/null || true
+    xrandr --output HDMI-A-1 --mode {res_target} --pos 0x0 --output HDMI-A-2 --mode {res_target} --pos {pos_x11} {same_as_flag_a} 2>/dev/null || xrandr --output HDMI-A-1 --auto --pos 0x0 --output HDMI-A-2 --auto --pos {pos_x11} {same_as_flag_a} 2>/dev/null || true
 fi"""
 
