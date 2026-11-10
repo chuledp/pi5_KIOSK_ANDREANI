@@ -1071,7 +1071,19 @@ class VLCAutoPlayApp(tk.Tk):
         self.set_status(f"Iniciando prueba en modo {prof.get('network_role', 'follower').upper()}...")
         try:
             self.active_daemon = SyncDaemon(self.profile_mgr)
-            self.active_daemon.start(profile_id=self.current_profile_id)
+            started = self.active_daemon.start(profile_id=self.current_profile_id)
+            if started is False:
+                messagebox.showerror(
+                    "Error de Reproducción",
+                    "No se pudo iniciar el reproductor MPV o VLC.\nVerificá que el archivo de medios sea legible y que los reproductores estén instalados."
+                )
+                self.active_daemon.stop()
+                self.active_daemon = None
+                self.btn_test.config(text="▶ Probar Reproducción / Sync Ahora", bg=THEME["primary"])
+                self.set_status("Error iniciando reproducción.")
+                self._restart_live_osc_listener()
+                return
+
             self.btn_test.config(text="⏹ Detener Prueba", bg=THEME["danger"])
             self.set_status(f"Prueba en curso con perfil '{prof['name']}'. Enviá comandos OSC al puerto {prof.get('osc_port', 9000)}.")
         except Exception as e:

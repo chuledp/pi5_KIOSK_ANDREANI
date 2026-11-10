@@ -61,15 +61,24 @@ class SyncDaemon:
         if role == "standalone" and engine == "vlc":
             vlc_bin = _resolve_vlc_binary()
             vlc_args = build_vlc_args(prof, binary=vlc_bin)
-            self.vlc_process = subprocess.Popen(
-                vlc_args,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            self.is_running = True
-            return
+            try:
+                self.vlc_process = subprocess.Popen(
+                    vlc_args,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                self.is_running = True
+                return True
+            except Exception as ve:
+                print(f"Error lanzando VLC: {ve}")
+                self.is_running = False
+                return False
 
-        self.mpv.launch(prof)
+        ok = self.mpv.launch(prof)
+        if not ok:
+            print(f"Error: No se pudo iniciar MPV con perfil '{prof['name']}'.")
+            self.is_running = False
+            return False
         self.is_running = True
 
         # Invertir mapeos: ruta_recibida -> accion_estandar
@@ -167,6 +176,12 @@ def run_daemon_cli():
 
     try:
         while daemon.is_running:
+            if daemon.mpv.process and daemon.mpv.process.poll() is not None:
+                print("El proceso MPV finalizó.")
+                break
+            if daemon.vlc_process and daemon.vlc_process.poll() is not None:
+                print("El proceso VLC finalizó.")
+                break
             time.sleep(1)
     except KeyboardInterrupt:
         daemon.stop()

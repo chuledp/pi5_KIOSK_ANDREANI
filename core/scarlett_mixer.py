@@ -363,6 +363,9 @@ def configure_scarlett_8i6_hardware(
         except Exception:
             pass
 
+    # 7. Asignar Scarlett como salida por defecto en PipeWire y PulseAudio
+    set_default_scarlett_sink()
+
     return True, f"Scarlett 8i6 ruteada ({info['card_id']}): Salidas 1-2 (Mix A/B), 3-4 (Mix C/D) y Sub S/PDIF 5-6 (Mix E/F)."
 
 
@@ -430,6 +433,74 @@ ctl.scarlett6ch {{
     card "{card_id}"
 }}
 """
+
+
+def set_default_scarlett_sink() -> bool:
+    """
+    Configura la Focusrite Scarlett USB como salida de audio por defecto
+    en PipeWire (wpctl) y PulseAudio (pactl).
+    """
+    if not sys.platform.startswith("linux"):
+        return False
+
+    success = False
+
+    # 1. PulseAudio / PipeWire-Pulse vía pactl
+    if shutil.which("pactl"):
+        try:
+            r = subprocess.run(
+                ["pactl", "list", "short", "sinks"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=2.0
+            )
+            for line in r.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 2:
+                    sink_name = parts[1]
+                    low = sink_name.lower()
+                    if "scarlett" in low or "focusrite" in low or "usb" in low:
+                        subprocess.run(["pactl", "set-default-sink", sink_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2.0)
+                        subprocess.run(["pactl", "set-sink-mute", sink_name, "0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2.0)
+                        subprocess.run(["pactl", "set-sink-volume", sink_name, "100%"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2.0)
+                        success = True
+                        break
+        except Exception:
+            pass
+
+    # 2. WirePlumber / PipeWire nativo vía wpctl
+    if shutil.which("wpctl"):
+        try:
+            r = subprocess.run(
+                ["wpctl", "status"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=2.0
+            )
+            in_sinks = False
+            for line in r.stdout.splitlines():
+                if "Sinks:" in line:
+                    in_sinks = True
+                    continue
+                if in_sinks and any(header in line for header in ("Sink endpoints:", "Sources:", "Streams:", "Filters:")):
+                    break
+                if in_sinks:
+                    low = line.lower()
+                    if "scarlett" in low or "focusrite" in low:
+                        m = re.search(r"(\d+)\.", line)
+                        if m:
+                            node_id = m.group(1)
+                            subprocess.run(["wpctl", "set-default", node_id], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2.0)
+                            subprocess.run(["wpctl", "set-mute", node_id, "0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2.0)
+                            subprocess.run(["wpctl", "set-volume", node_id, "1.0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2.0)
+                            success = True
+                            break
+        except Exception:
+            pass
+
+    return success
 
 
 def write_asoundrc_if_scarlett() -> Optional[str]:

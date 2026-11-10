@@ -13,7 +13,12 @@ import threading
 import subprocess
 from typing import Optional, Dict, Any, List
 
-from core.scarlett_mixer import build_mpv_audio_filter, apply_scarlett_mix_levels
+from core.scarlett_mixer import (
+    build_mpv_audio_filter,
+    apply_scarlett_mix_levels,
+    detect_scarlett_card,
+    set_default_scarlett_sink
+)
 
 DEFAULT_SOCKET_PATH = "/tmp/mpv-autoplay-socket"
 DEFAULT_LOG_PATH = "/tmp/mpv-autoplay.log"
@@ -85,11 +90,23 @@ class MPVController:
         else:
             vol = max(0, min(300, int(profile.get("volume", 100))))
             cmd.append(f"--volume={vol}")
-            if profile.get("scarlett_enabled", True):
-                cmd.append("--audio-channels=5.1")
-            af_str = build_mpv_audio_filter(profile)
-            if af_str:
-                cmd.append(f"--af={af_str}")
+
+            scarlett_enabled = bool(profile.get("scarlett_enabled", True))
+            scarlett_info = detect_scarlett_card() if scarlett_enabled else {"found": False}
+
+            if scarlett_enabled and scarlett_info.get("found"):
+                # Asignar la interfaz USB Scarlett directamente en MPV
+                cmd.append(f"--audio-device={scarlett_info['mpv_device']}")
+                cmd.append("--audio-channels=auto-safe")
+                set_default_scarlett_sink()
+                af_str = build_mpv_audio_filter(profile)
+                if af_str:
+                    cmd.append(f"--af={af_str}")
+            else:
+                # Salida por defecto (HDMI / Sistema) sin forzar 5.1 para evitar fallos en estéreo
+                cmd.append("--audio-channels=auto-safe")
+                if profile.get("audio_boost", True):
+                    cmd.append("--af=lavfi=[dynaudnorm=f=200:g=15:p=0.95,alimiter=limit=0.98:attack=5:release=50:level=disabled]")
 
         # Configuración de decodificación y renderizado para Raspberry Pi 5 (H.265 / HEVC)
         # Nota: '--hwdec=auto-safe' elige 'drm' zero-copy (formato SAND128), lo cual en el
@@ -166,6 +183,21 @@ class MPVController:
                 time.sleep(0.1)
                 if os.path.exists(self.socket_path):
                     break
+                if self.process.poll() is not None:
+                    break
+
+            if not os.path.exists(self.socket_path):
+                log_snippet = ""
+                if os.path.exists(self.log_path):
+                    try:
+                        with open(self.log_path, "r", encoding="utf-8", errors="ignore") as lf:
+                            log_snippet = "".join(lf.readlines()[-20:])
+                    except Exception:
+                        pass
+                print(f"Advertencia: MPV no inició el socket IPC en {self.socket_path}.")
+                if log_snippet:
+                    print(f"Log MPV:\n{log_snippet}")
+                return False
 
             # Asegurar que no quede en pausa al iniciar
             self.play()
