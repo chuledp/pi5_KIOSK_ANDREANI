@@ -32,7 +32,7 @@ def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
         "audio_boost": True,
         "dual_hdmi_enabled": True,
         "dual_hdmi_mode": "mirror",  # "mirror" (0,0 clonado) o "dual_mpv" (2 ventanas en pantalla 0 y 1)
-        "dual_hdmi_resolution": "auto",  # "auto", "1920x1080", "1280x800", "1280x720"
+        "dual_hdmi_resolution": "auto",  # "auto", "3840x2160", "3840x2160@30", "1920x1080", "1280x800", "1280x720"
         "delay_seconds": 5,
         "extra_args": "",
         "player_engine": "mpv",  # "mpv" o "vlc"

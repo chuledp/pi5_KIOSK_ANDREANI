@@ -116,6 +116,12 @@ class TestVLCAutoPlayCore(unittest.TestCase):
         snippet_off = build_dual_hdmi_shell_snippet(profile)
         self.assertIn("desactivado", snippet_off)
 
+        # 4K resolution check
+        profile["dual_hdmi_enabled"] = True
+        profile["dual_hdmi_resolution"] = "3840x2160"
+        snippet_4k = build_dual_hdmi_shell_snippet(profile)
+        self.assertIn("--mode 3840x2160", snippet_4k)
+
         # Status detection & non-linux mock
         st = detect_hdmi_outputs()
         self.assertIn("summary", st)

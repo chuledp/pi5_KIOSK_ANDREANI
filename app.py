@@ -447,8 +447,8 @@ class VLCAutoPlayApp(tk.Tk):
         tk.Label(self.dual_hdmi_frame, text="Resolución:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
         self.combo_dual_res = ttk.Combobox(
             self.dual_hdmi_frame,
-            values=["auto", "1920x1080", "1280x800", "1280x720"],
-            width=9,
+            values=["auto", "3840x2160", "3840x2160@30", "1920x1080", "1280x800", "1280x720"],
+            width=13,
             state="readonly",
             textvariable=self.var_dual_res
         )

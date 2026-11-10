@@ -234,7 +234,11 @@ def build_dual_hdmi_shell_snippet(profile: Dict[str, Any]) -> str:
     dual_mode = profile.get("dual_hdmi_mode", "mirror")
     resolution = profile.get("dual_hdmi_resolution", "auto")
     is_mirror = (dual_mode == "mirror")
-    res_target = resolution if resolution != "auto" else "1920x1080"
+    if resolution != "auto":
+        res_target = resolution
+    else:
+        st = detect_hdmi_outputs()
+        res_target = st.get("common_resolution") or "1920x1080"
     width = int(res_target.split("x")[0]) if "x" in res_target else 1920
     pos_wlr = "0,0" if is_mirror else f"{width},0"
     pos_x11 = "0x0" if is_mirror else f"{width}x0"
