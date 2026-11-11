@@ -1,10 +1,34 @@
-# 🎬 AutoPlay Studio • DUAL OPTOMA (2 Salidas HDMI Espejadas) + Sync & OSC
+# 🎬 AutoPlay Studio • KIOSK ANDREANI (Multi-Pi & Control Web)
 
-> ### ⚡ Instalación Rápida de la rama DUAL-OPTOMA (Pegar en la terminal de la Raspberry Pi 5):
-> ```bash
-> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/DUAL-OPTOMA/quick-install.sh | bash
-> ```
-> *(Instala dependencias: MPV, VLC, `wlr-randr`, `xrandr`, fuerza `vc4.force_hotplug=3` para ambos conectores micro-HDMI, y crea el acceso directo en el Escritorio)*
+> ### 📱 COMANDOS RÁPIDOS DE `git pull` PARA CADA RASPBERRY PI
+> Copiá y pegá el comando que corresponda en la terminal de cada Raspberry Pi:
+>
+> * **Para las Raspberry Pi 5 con Doble Proyector Optoma (`DUAL-OPTOMA`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git fetch origin && git checkout DUAL-OPTOMA && git pull origin DUAL-OPTOMA
+>   ```
+>
+> * **Para las Raspberry Pi con Placa Focusrite Scarlett (`Pi+Scarlett`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git fetch origin && git checkout Pi+Scarlett && git pull origin Pi+Scarlett
+>   ```
+>
+> * **Para las Raspberry Pi estándar / Pi 3 (`main`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git fetch origin && git checkout main && git pull origin main
+>   ```
+>
+> * **Para la rama con el desarrollo web puro (`web-control`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git fetch origin && git checkout web-control && git pull origin web-control
+>   ```
+>
+> ---
+> **📱 CÓMO ACCEDER AL CONTROL WEB DESDE LA TABLET SAMSUNG:**
+> 1. Conectá la tablet a la misma red Wi-Fi de las Raspberry Pi.
+> 2. Abrí Chrome y navegá a: **`http://<IP_DE_CUALQUIER_PI>:8080`**
+> 3. Ingresá el **PIN: `1234`** (configurable desde AutoPlay Studio).
+> 4. *(Opcional)* En Chrome tocá `⋮` $\rightarrow$ **"Agregar a la pantalla principal"** para usarla a pantalla completa como una app.
 
 ---
 

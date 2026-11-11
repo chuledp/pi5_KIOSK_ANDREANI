@@ -129,6 +129,7 @@ class AutostartManager:
             engine = profile.get("player_engine", "mpv")
             role = profile.get("network_role", "follower")
             profile_id = profile.get("id", "")
+            web_enabled = profile.get("web_control_enabled", True)
 
             vlc_cmd = build_vlc_command(profile, binary="cvlc")
             dual_hdmi_snippet = build_dual_hdmi_shell_snippet(profile)
@@ -163,7 +164,7 @@ if command -v amixer >/dev/null 2>&1; then
 fi
 
 # Iniciar reproducción según el motor y rol configurado
-if [ "{engine}" = "mpv" ] || [ "{role}" != "standalone" ]; then
+if [ "{engine}" = "mpv" ] || [ "{role}" != "standalone" ] || [ "{web_enabled}" = "True" ]; then
     cd "{self.project_dir}"
     exec python3 -m core.sync_runner "{profile_id}"
 else

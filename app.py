@@ -11,6 +11,7 @@ import sys
 import shutil
 import subprocess
 import time
+import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, Dict, Any
@@ -20,6 +21,7 @@ from core.autostart import AutostartManager, build_vlc_command
 from core.dual_display import detect_hdmi_outputs, enable_dual_hdmi_mirror
 from core.sync_runner import SyncDaemon
 from core.osc_receiver import OSCReceiver
+from core.web_control.discovery import get_local_ip
 
 # Paleta de colores Dark Theme Profesional
 THEME = {
@@ -390,6 +392,53 @@ class VLCAutoPlayApp(tk.Tk):
         self.combo_hwdec.pack(side=tk.LEFT)
         self.combo_hwdec.bind("<<ComboboxSelected>>", self.save_current_settings)
 
+        # Fila de Control Web para Tablet Samsung y Mantenimiento
+        tablet_fields_row = tk.Frame(card_net, bg=THEME["card"])
+        tablet_fields_row.pack(fill=tk.X, pady=(8, 2))
+
+        tk.Label(tablet_fields_row, text="Sala / Dispositivo:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.entry_device_name = tk.Entry(tablet_fields_row, width=14, bg=THEME["surface"], fg=THEME["text"], bd=1, relief="solid")
+        self.entry_device_name.pack(side=tk.LEFT, padx=(0, 10))
+        self.entry_device_name.bind("<FocusOut>", self.save_current_settings)
+
+        tk.Label(tablet_fields_row, text="Piso:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.var_device_floor = tk.StringVar(value="Planta Baja")
+        self.combo_device_floor = ttk.Combobox(
+            tablet_fields_row,
+            values=["Planta Baja", "1er Piso", "2do Piso", "3er Piso", "Subsuelo"],
+            width=11,
+            state="readonly",
+            textvariable=self.var_device_floor
+        )
+        self.combo_device_floor.pack(side=tk.LEFT, padx=(0, 10))
+        self.combo_device_floor.bind("<<ComboboxSelected>>", self.save_current_settings)
+
+        self.var_web_control_enabled = tk.BooleanVar(value=True)
+        cb_web = ttk.Checkbutton(
+            tablet_fields_row,
+            text="📱 Web Tablet",
+            variable=self.var_web_control_enabled,
+            command=self.save_current_settings,
+            style="Card.TCheckbutton"
+        )
+        cb_web.pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Label(tablet_fields_row, text="PIN:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.entry_web_pin = tk.Entry(tablet_fields_row, width=5, bg=THEME["surface"], fg=THEME["text"], bd=1, relief="solid")
+        self.entry_web_pin.pack(side=tk.LEFT, padx=(0, 10))
+        self.entry_web_pin.bind("<FocusOut>", self.save_current_settings)
+
+        self.lbl_web_url = tk.Label(
+            tablet_fields_row,
+            text="http://localhost:8080",
+            bg=THEME["card"],
+            fg=THEME["primary"],
+            font=("Helvetica", 9, "underline"),
+            cursor="hand2"
+        )
+        self.lbl_web_url.pack(side=tk.LEFT)
+        self.lbl_web_url.bind("<Button-1>", lambda e: self.open_web_control_browser())
+
         # Tarjeta 4: Ajustes de Exhibición
         card_opts = tk.Frame(right_col, bg=THEME["card"], padx=14, pady=10, bd=1, relief="ridge")
         card_opts.pack(fill=tk.X, pady=(0, 8))
@@ -694,6 +743,21 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_volume.set(vol)
         self._update_vol_label(vol)
 
+        # Ajustes de Control Web para Tablet
+        dev_name = prof.get("device_name") or prof.get("name", "Sala")
+        self.entry_device_name.delete(0, tk.END)
+        self.entry_device_name.insert(0, dev_name)
+
+        self.var_device_floor.set(prof.get("device_floor", "Planta Baja"))
+        self.var_web_control_enabled.set(prof.get("web_control_enabled", True))
+
+        self.entry_web_pin.delete(0, tk.END)
+        self.entry_web_pin.insert(0, str(prof.get("web_control_pin", "1234")))
+
+        local_ip = get_local_ip()
+        web_port = prof.get("web_control_port", 8080)
+        self.lbl_web_url.config(text=f"http://{local_ip}:{web_port}")
+
         self.on_role_change()
 
         profiles = self.profile_mgr.get_profiles()
@@ -749,10 +813,25 @@ class VLCAutoPlayApp(tk.Tk):
             "dual_hdmi_mode": self.var_dual_mode.get(),
             "dual_hdmi_resolution": self.var_dual_res.get(),
             "delay_seconds": int(self.var_delay.get()),
-            "volume": int(self.var_volume.get())
+            "volume": int(self.var_volume.get()),
+            "device_name": self.entry_device_name.get().strip() or "Sala",
+            "device_floor": self.var_device_floor.get(),
+            "web_control_enabled": self.var_web_control_enabled.get(),
+            "web_control_pin": self.entry_web_pin.get().strip() or "1234"
         }
 
         self.profile_mgr.update_profile(self.current_profile_id, updates)
+
+    def open_web_control_browser(self):
+        prof = self.profile_mgr.get_profile(self.current_profile_id) or {}
+        port = prof.get("web_control_port", 8080)
+        ip = get_local_ip()
+        url = f"http://{ip}:{port}"
+        try:
+            webbrowser.open(url)
+            self.set_status(f"Abriendo control web en: {url}")
+        except Exception:
+            pass
         
         active = self.profile_mgr.get_active_profile()
         if active and active["id"] == self.current_profile_id and self.profile_mgr.is_autostart_enabled():

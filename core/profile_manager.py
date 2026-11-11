@@ -40,7 +40,12 @@ def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
         "network_role": "follower",  # "standalone", "follower", "master"
         "osc_port": 9000,
         "osc_broadcast_ip": "255.255.255.255",
-        "osc_mappings": dict(DEFAULT_OSC_MAPPINGS)
+        "osc_mappings": dict(DEFAULT_OSC_MAPPINGS),
+        "device_name": name,
+        "device_floor": "Planta Baja",  # "Planta Baja", "1er Piso", "2do Piso"
+        "web_control_enabled": True,
+        "web_control_port": 8080,
+        "web_control_pin": "1234"
     }
 
 class ProfileManager:
@@ -84,6 +89,16 @@ class ProfileManager:
                             p["osc_broadcast_ip"] = "255.255.255.255"
                         if "osc_mappings" not in p:
                             p["osc_mappings"] = dict(DEFAULT_OSC_MAPPINGS)
+                        if "device_name" not in p:
+                            p["device_name"] = p.get("name", "Sala")
+                        if "device_floor" not in p:
+                            p["device_floor"] = "Planta Baja"
+                        if "web_control_enabled" not in p:
+                            p["web_control_enabled"] = True
+                        if "web_control_port" not in p:
+                            p["web_control_port"] = 8080
+                        if "web_control_pin" not in p:
+                            p["web_control_pin"] = "1234"
                     self.data["profiles"] = profiles
             except Exception as e:
                 print(f"Error cargando configuración: {e}")

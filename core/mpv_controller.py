@@ -317,6 +317,12 @@ class MPVController:
         return None
 
     # Métodos de transporte de alto nivel
+    def is_paused(self) -> bool:
+        res = self.send_command(["get_property", "pause"])
+        if res and "data" in res:
+            return bool(res["data"])
+        return False
+
     def play(self):
         self.send_command(["set_property", "pause", False])
 
