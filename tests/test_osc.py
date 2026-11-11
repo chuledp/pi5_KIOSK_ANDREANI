@@ -36,6 +36,14 @@ class TestOSC(unittest.TestCase):
 
         received = []
 
+        # Probar si el entorno permite enviar paquetes UDP locales
+        try:
+            test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            test_sock.sendto(b"test", ("127.0.0.1", 9753))
+            test_sock.close()
+        except OSError:
+            self.skipTest("Loopback UDP no permitido en este entorno sandbox")
+
         receiver = OSCReceiver(port=9753, host="127.0.0.1")
         receiver.on("/cue", lambda addr, args: received.append((addr, args)))
         receiver.start()

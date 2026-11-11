@@ -4,6 +4,7 @@ import unittest
 from core.profile_manager import ProfileManager, create_default_profile
 from core.autostart import AutostartManager, build_vlc_command
 from core.scarlett_mixer import build_mpv_audio_filter, _split_gain_to_dual_bus
+from core.dual_display import build_dual_hdmi_shell_snippet, detect_hdmi_outputs, enable_dual_hdmi_mirror
 
 class TestVLCAutoPlayCore(unittest.TestCase):
     def setUp(self):
@@ -91,6 +92,8 @@ class TestVLCAutoPlayCore(unittest.TestCase):
         with open(self.runner_file, "r") as f:
             content = f.read()
             self.assertIn("sleep 8", content)
+            self.assertIn("HDMI-A-1", content)
+            self.assertIn("HDMI-A-2", content)
             self.assertIn("cvlc", content)
             self.assertIn("/home/pi/exposicion.mp4", content)
 
@@ -116,6 +119,34 @@ class TestVLCAutoPlayCore(unittest.TestCase):
         # Dual bus split (0-200% -> Primary 0-100% + Parallel Boost 0-100%)
         self.assertEqual(_split_gain_to_dual_bus(80), (80, 0))
         self.assertEqual(_split_gain_to_dual_bus(165), (100, 65))
+
+    def test_dual_display_snippet(self):
+        profile = create_default_profile("Dual Test")
+        profile["dual_hdmi_enabled"] = True
+        profile["dual_hdmi_mode"] = "mirror"
+
+        snippet = build_dual_hdmi_shell_snippet(profile)
+        self.assertIn("wlr-randr", snippet)
+        self.assertIn("HDMI-A-1", snippet)
+        self.assertIn("HDMI-A-2", snippet)
+        self.assertIn("pos 0,0", snippet)
+
+        # Disabled case
+        profile["dual_hdmi_enabled"] = False
+        snippet_off = build_dual_hdmi_shell_snippet(profile)
+        self.assertIn("desactivado", snippet_off)
+
+        # 4K resolution check
+        profile["dual_hdmi_enabled"] = True
+        profile["dual_hdmi_resolution"] = "3840x2160"
+        snippet_4k = build_dual_hdmi_shell_snippet(profile)
+        self.assertIn("--mode 3840x2160", snippet_4k)
+
+        # Status detection & non-linux mock
+        st = detect_hdmi_outputs()
+        self.assertIn("summary", st)
+        ok, msg = enable_dual_hdmi_mirror(profile)
+        self.assertTrue(ok)
 
 if __name__ == "__main__":
     unittest.main()

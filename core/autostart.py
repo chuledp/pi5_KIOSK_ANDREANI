@@ -4,6 +4,7 @@ import stat
 import shutil
 import subprocess
 from typing import Dict, Any, Optional, List
+from core.dual_display import build_dual_hdmi_shell_snippet
 
 DEFAULT_AUTOSTART_DIR = os.path.expanduser("~/.config/autostart")
 DEFAULT_AUTOSTART_DESKTOP = os.path.join(DEFAULT_AUTOSTART_DIR, "vlc-autoplay.desktop")
@@ -128,8 +129,10 @@ class AutostartManager:
             engine = profile.get("player_engine", "mpv")
             role = profile.get("network_role", "follower")
             profile_id = profile.get("id", "")
+            web_enabled = profile.get("web_control_enabled", True)
 
             vlc_cmd = build_vlc_command(profile, binary="cvlc")
+            dual_hdmi_snippet = build_dual_hdmi_shell_snippet(profile)
 
             runner_content = f"""#!/usr/bin/env bash
 # ========================================================
@@ -145,7 +148,7 @@ sleep {delay}
 if command -v xset >/dev/null 2>&1; then
     xset s off -dpms || true
 fi
-
+{dual_hdmi_snippet}
 # Forzar el volumen maestro del sistema (PipeWire / PulseAudio / ALSA) al 100% y sin mute
 if command -v wpctl >/dev/null 2>&1; then
     wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 2>/dev/null || true
@@ -165,7 +168,7 @@ cd "{self.project_dir}"
 python3 -c "from core.profile_manager import ProfileManager; from core.scarlett_mixer import configure_scarlett_8i6_hardware; pm = ProfileManager(); p = pm.get_profile('{profile_id}') or pm.get_active_profile() or {{}}; configure_scarlett_8i6_hardware(p) if p.get('scarlett_enabled', True) else None" 2>/dev/null || true
 
 # Iniciar reproducción según el motor y rol configurado
-if [ "{engine}" = "mpv" ] || [ "{role}" != "standalone" ]; then
+if [ "{engine}" = "mpv" ] || [ "{role}" != "standalone" ] || [ "{web_enabled}" = "True" ]; then
     cd "{self.project_dir}"
     exec python3 -m core.sync_runner "{profile_id}"
 else

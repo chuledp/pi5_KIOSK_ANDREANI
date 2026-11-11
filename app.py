@@ -11,12 +11,14 @@ import sys
 import shutil
 import subprocess
 import time
+import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional, Dict, Any
 
 from core.profile_manager import ProfileManager, DEFAULT_OSC_MAPPINGS
 from core.autostart import AutostartManager, build_vlc_command
+from core.dual_display import detect_hdmi_outputs, enable_dual_hdmi_mirror
 from core.sync_runner import SyncDaemon
 from core.osc_receiver import OSCReceiver
 from core.scarlett_mixer import (
@@ -25,6 +27,7 @@ from core.scarlett_mixer import (
     apply_scarlett_mix_levels,
     launch_scarlett_gui,
 )
+from core.web_control.discovery import get_local_ip
 
 # Paleta de colores Dark Theme Profesional
 THEME = {
@@ -39,6 +42,7 @@ THEME = {
     "danger": "#ef4444",
     "danger_hover": "#dc2626",
     "purple": "#8b5cf6",
+    "teal": "#14b8a6",
     "amber": "#f59e0b",
     "text": "#f9fafb",
     "text_muted": "#9ca3af",
@@ -80,6 +84,8 @@ class VLCAutoPlayApp(tk.Tk):
         active_prof = self.profile_mgr.get_active_profile()
         if active_prof:
             self.select_profile(active_prof["id"])
+            if active_prof.get("dual_hdmi_enabled", True):
+                enable_dual_hdmi_mirror(active_prof)
 
         self.update_autostart_badge()
         self._start_live_osc_listener()
@@ -115,12 +121,12 @@ class VLCAutoPlayApp(tk.Tk):
         title_box = tk.Frame(header_frame, bg=THEME["surface"])
         title_box.pack(side=tk.LEFT)
 
-        lbl_title = ttk.Label(title_box, text="🎬 AutoPlay Studio • Sync & OSC", style="Title.TLabel")
+        lbl_title = ttk.Label(title_box, text="🎬 AutoPlay Studio • Dual Optoma HDMI + Sync & OSC", style="Title.TLabel")
         lbl_title.pack(anchor="w")
 
         lbl_sub = ttk.Label(
             title_box,
-            text="Kiosk de Video/Audio con Sincronización por Red y Cues OSC (TouchDesigner, Resolume, Reaper)",
+            text="Kiosk con Doble Salida HDMI Espejada (HDMI 1 + HDMI 2) + Sincronización por Red y Cues OSC",
             style="Subtitle.TLabel"
         )
         lbl_sub.pack(anchor="w", pady=(2, 0))
@@ -392,6 +398,53 @@ class VLCAutoPlayApp(tk.Tk):
         self.combo_hwdec.pack(side=tk.LEFT)
         self.combo_hwdec.bind("<<ComboboxSelected>>", self.save_current_settings)
 
+        # Fila de Control Web para Tablet Samsung y Mantenimiento
+        tablet_fields_row = tk.Frame(card_net, bg=THEME["card"])
+        tablet_fields_row.pack(fill=tk.X, pady=(8, 2))
+
+        tk.Label(tablet_fields_row, text="Sala / Dispositivo:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.entry_device_name = tk.Entry(tablet_fields_row, width=14, bg=THEME["surface"], fg=THEME["text"], bd=1, relief="solid")
+        self.entry_device_name.pack(side=tk.LEFT, padx=(0, 10))
+        self.entry_device_name.bind("<FocusOut>", self.save_current_settings)
+
+        tk.Label(tablet_fields_row, text="Piso:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.var_device_floor = tk.StringVar(value="Planta Baja")
+        self.combo_device_floor = ttk.Combobox(
+            tablet_fields_row,
+            values=["Planta Baja", "1er Piso", "2do Piso", "3er Piso", "Subsuelo"],
+            width=11,
+            state="readonly",
+            textvariable=self.var_device_floor
+        )
+        self.combo_device_floor.pack(side=tk.LEFT, padx=(0, 10))
+        self.combo_device_floor.bind("<<ComboboxSelected>>", self.save_current_settings)
+
+        self.var_web_control_enabled = tk.BooleanVar(value=True)
+        cb_web = ttk.Checkbutton(
+            tablet_fields_row,
+            text="📱 Web Tablet",
+            variable=self.var_web_control_enabled,
+            command=self.save_current_settings,
+            style="Card.TCheckbutton"
+        )
+        cb_web.pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Label(tablet_fields_row, text="PIN:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.entry_web_pin = tk.Entry(tablet_fields_row, width=5, bg=THEME["surface"], fg=THEME["text"], bd=1, relief="solid")
+        self.entry_web_pin.pack(side=tk.LEFT, padx=(0, 10))
+        self.entry_web_pin.bind("<FocusOut>", self.save_current_settings)
+
+        self.lbl_web_url = tk.Label(
+            tablet_fields_row,
+            text="http://localhost:8080",
+            bg=THEME["card"],
+            fg=THEME["primary"],
+            font=("Helvetica", 9, "underline"),
+            cursor="hand2"
+        )
+        self.lbl_web_url.pack(side=tk.LEFT)
+        self.lbl_web_url.bind("<Button-1>", lambda e: self.open_web_control_browser())
+
         # Tarjeta 4: Ajustes de Exhibición
         card_opts = tk.Frame(right_col, bg=THEME["card"], padx=14, pady=10, bd=1, relief="ridge")
         card_opts.pack(fill=tk.X, pady=(0, 8))
@@ -408,6 +461,9 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_scarlett_12 = tk.IntVar(value=120)
         self.var_scarlett_34 = tk.IntVar(value=120)
         self.var_scarlett_sub = tk.IntVar(value=130)
+        self.var_dual_hdmi = tk.BooleanVar(value=True)
+        self.var_dual_mode = tk.StringVar(value="mirror")
+        self.var_dual_res = tk.StringVar(value="auto")
         self.var_delay = tk.IntVar(value=5)
         self.var_volume = tk.IntVar(value=150)
 
@@ -420,7 +476,7 @@ class VLCAutoPlayApp(tk.Tk):
         cb2 = ttk.Checkbutton(chk_grid, text="Pantalla completa", variable=self.var_fullscreen, command=self.save_current_settings, style="Card.TCheckbutton")
         cb2.grid(row=0, column=1, sticky="w", padx=(0, 20), pady=2)
 
-        cb5 = ttk.Checkbutton(chk_grid, text="🔊 Boost + Limitador (Anti-saturación)", variable=self.var_audio_boost, command=self._on_audio_boost_toggle, style="Card.TCheckbutton")
+        cb5 = ttk.Checkbutton(chk_grid, text="🔊 Boost + Limitador", variable=self.var_audio_boost, command=self._on_audio_boost_toggle, style="Card.TCheckbutton")
         cb5.grid(row=0, column=2, sticky="w", pady=2)
 
         cb3 = ttk.Checkbutton(chk_grid, text="Ocultar título / OSD", variable=self.var_hide_osd, command=self.save_current_settings, style="Card.TCheckbutton")
@@ -428,6 +484,58 @@ class VLCAutoPlayApp(tk.Tk):
 
         cb4 = ttk.Checkbutton(chk_grid, text="Ocultar cursor mouse", variable=self.var_hide_mouse, command=self.save_current_settings, style="Card.TCheckbutton")
         cb4.grid(row=1, column=1, sticky="w", padx=(0, 20), pady=2)
+
+        cb6 = ttk.Checkbutton(chk_grid, text="📽️ 2 Salidas HDMI (Dual Optoma)", variable=self.var_dual_hdmi, command=self._on_dual_hdmi_toggle, style="Card.TCheckbutton")
+        cb6.grid(row=1, column=2, sticky="w", pady=2)
+
+        # Opciones Dual HDMI Optoma
+        self.dual_hdmi_frame = tk.Frame(card_opts, bg=THEME["card"])
+        self.dual_hdmi_frame.pack(fill=tk.X, pady=(2, 6))
+
+        tk.Label(self.dual_hdmi_frame, text="Modo Dual:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.combo_dual_mode = ttk.Combobox(
+            self.dual_hdmi_frame,
+            values=["mirror", "dual_mpv"],
+            width=9,
+            state="readonly",
+            textvariable=self.var_dual_mode
+        )
+        self.combo_dual_mode.pack(side=tk.LEFT, padx=(0, 10))
+        self.combo_dual_mode.bind("<<ComboboxSelected>>", self.save_current_settings)
+
+        tk.Label(self.dual_hdmi_frame, text="Resolución:", bg=THEME["card"], fg=THEME["text_muted"], font=("Helvetica", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        self.combo_dual_res = ttk.Combobox(
+            self.dual_hdmi_frame,
+            values=["auto", "3840x2160", "3840x2160@30", "1920x1080", "1280x800", "1280x720"],
+            width=13,
+            state="readonly",
+            textvariable=self.var_dual_res
+        )
+        self.combo_dual_res.pack(side=tk.LEFT, padx=(0, 10))
+        self.combo_dual_res.bind("<<ComboboxSelected>>", self.save_current_settings)
+
+        self.btn_detect_hdmi = tk.Button(
+            self.dual_hdmi_frame,
+            text="🔄 Detectar / Forzar Espejo",
+            command=self.action_force_hdmi_mirror,
+            bg=THEME["card_border"],
+            fg=THEME["text"],
+            relief="flat",
+            font=("Helvetica", 8, "bold"),
+            cursor="hand2",
+            padx=6,
+            pady=1
+        )
+        self.btn_detect_hdmi.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.lbl_hdmi_status = tk.Label(
+            self.dual_hdmi_frame,
+            text="HDMI 1+2",
+            bg=THEME["card"],
+            fg=THEME["teal"],
+            font=("Helvetica", 8, "bold")
+        )
+        self.lbl_hdmi_status.pack(side=tk.LEFT)
 
         # Sliders
         slider_frame = tk.Frame(card_opts, bg=THEME["card"])
@@ -685,6 +793,19 @@ class VLCAutoPlayApp(tk.Tk):
         if not ok:
             messagebox.showinfo("alsa-scarlett-gui", msg)
 
+    def _on_dual_hdmi_toggle(self):
+        self.save_current_settings()
+        if self.var_dual_hdmi.get():
+            self.action_force_hdmi_mirror()
+
+    def action_force_hdmi_mirror(self):
+        prof = self.profile_mgr.get_profile(self.current_profile_id) if self.current_profile_id else {}
+        ok, msg = enable_dual_hdmi_mirror(prof)
+        st = detect_hdmi_outputs()
+        if hasattr(self, "lbl_hdmi_status"):
+            self.lbl_hdmi_status.config(text=st["summary"])
+        self.set_status(msg)
+
     def on_role_change(self):
         role = self.var_network_role.get()
         if role == "master":
@@ -750,7 +871,16 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_scarlett_12.set(g12)
         self.var_scarlett_34.set(g34)
         self.var_scarlett_sub.set(gsub)
-        self._update_scarlett_labels(g12, g34, gsub)
+        if hasattr(self, "_update_scarlett_labels"):
+            self._update_scarlett_labels(g12, g34, gsub)
+
+        self.var_dual_hdmi.set(prof.get("dual_hdmi_enabled", True))
+        self.var_dual_mode.set(prof.get("dual_hdmi_mode", "mirror"))
+        self.var_dual_res.set(prof.get("dual_hdmi_resolution", "auto"))
+
+        st = detect_hdmi_outputs()
+        if hasattr(self, "lbl_hdmi_status"):
+            self.lbl_hdmi_status.config(text=st["summary"])
 
         delay = prof.get("delay_seconds", 5)
         self.var_delay.set(delay)
@@ -759,6 +889,21 @@ class VLCAutoPlayApp(tk.Tk):
         vol = int(prof.get("volume", 100))
         self.var_volume.set(vol)
         self._update_vol_label(vol)
+
+        # Ajustes de Control Web para Tablet
+        dev_name = prof.get("device_name") or prof.get("name", "Sala")
+        self.entry_device_name.delete(0, tk.END)
+        self.entry_device_name.insert(0, dev_name)
+
+        self.var_device_floor.set(prof.get("device_floor", "Planta Baja"))
+        self.var_web_control_enabled.set(prof.get("web_control_enabled", True))
+
+        self.entry_web_pin.delete(0, tk.END)
+        self.entry_web_pin.insert(0, str(prof.get("web_control_pin", "1234")))
+
+        local_ip = get_local_ip()
+        web_port = prof.get("web_control_port", 8080)
+        self.lbl_web_url.config(text=f"http://{local_ip}:{web_port}")
 
         self.on_role_change()
 
@@ -815,11 +960,29 @@ class VLCAutoPlayApp(tk.Tk):
             "scarlett_gain_12": int(self.var_scarlett_12.get()),
             "scarlett_gain_34": int(self.var_scarlett_34.get()),
             "scarlett_gain_sub": int(self.var_scarlett_sub.get()),
+            "dual_hdmi_enabled": self.var_dual_hdmi.get(),
+            "dual_hdmi_mode": self.var_dual_mode.get(),
+            "dual_hdmi_resolution": self.var_dual_res.get(),
             "delay_seconds": int(self.var_delay.get()),
-            "volume": int(self.var_volume.get())
+            "volume": int(self.var_volume.get()),
+            "device_name": self.entry_device_name.get().strip() or "Sala",
+            "device_floor": self.var_device_floor.get(),
+            "web_control_enabled": self.var_web_control_enabled.get(),
+            "web_control_pin": self.entry_web_pin.get().strip() or "1234"
         }
 
         self.profile_mgr.update_profile(self.current_profile_id, updates)
+
+    def open_web_control_browser(self):
+        prof = self.profile_mgr.get_profile(self.current_profile_id) or {}
+        port = prof.get("web_control_port", 8080)
+        ip = get_local_ip()
+        url = f"http://{ip}:{port}"
+        try:
+            webbrowser.open(url)
+            self.set_status(f"Abriendo control web en: {url}")
+        except Exception:
+            pass
         
         active = self.profile_mgr.get_active_profile()
         if active and active["id"] == self.current_profile_id and self.profile_mgr.is_autostart_enabled():

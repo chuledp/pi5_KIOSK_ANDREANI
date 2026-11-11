@@ -13,9 +13,9 @@ BRANCH="Pi+Scarlett"
 
 echo "=== Instalador Rápido AutoPlay Studio (Pi 5 + Focusrite Scarlett 8i6) ==="
 
-# 1. Instalar dependencias principales (git, mpv, vlc, python3-tk, alsa-utils)
-echo "Verificando dependencias del sistema (git, mpv, vlc, python3-tk, alsa-utils)..."
-sudo apt update && sudo apt install -y git mpv vlc python3-tk alsa-utils pulseaudio-utils || sudo apt install -y git mpv vlc python3-tk alsa-utils
+# 1. Instalar dependencias principales (git, mpv, vlc, python3-tk, alsa-utils, wlr-randr)
+echo "Verificando dependencias del sistema (git, mpv, vlc, python3-tk, alsa-utils, wlr-randr)..."
+sudo apt update && sudo apt install -y git mpv vlc python3-tk alsa-utils pulseaudio-utils wlr-randr x11-xserver-utils || sudo apt install -y git mpv vlc python3-tk alsa-utils
 
 # 2. Instalar alsa-scarlett-gui (vía apt o compilando desde el repo oficial de Geoffrey Bennett)
 if ! command -v alsa-scarlett-gui >/dev/null 2>&1; then

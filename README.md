@@ -1,22 +1,45 @@
-# 🎬 AutoPlay Studio • Pi 5 + Focusrite Scarlett 8i6 (6 Salidas & OSC)
+# 🎬 AutoPlay Studio • KIOSK ANDREANI (Multi-Pi & Control Web)
 
-> ### ⚡ Instalación Rápida (Pegar en la terminal de la Raspberry Pi 5):
-> ```bash
-> curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/Pi%2BScarlett/quick-install.sh | bash
-> ```
-> *(Instala dependencias: MPV, VLC, ALSA, Python Tkinter, alsa-scarlett-gui y crea el acceso directo en el Escritorio)*
+> ### 📱 COMANDOS RÁPIDOS DE `git pull` PARA CADA RASPBERRY PI
+> Copiá y pegá el comando que corresponda en la terminal de cada Raspberry Pi:
+>
+> * **Para las Raspberry Pi 5 con Doble Proyector Optoma (`DUAL-OPTOMA`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git fetch origin && git checkout DUAL-OPTOMA && git pull origin DUAL-OPTOMA
+>   ```
+>
+> * **Para las Raspberry Pi con Placa Focusrite Scarlett (`Pi+Scarlett`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git fetch origin && git checkout Pi+Scarlett && git pull origin Pi+Scarlett
+>   ```
+>
+> * **Para las Raspberry Pi estándar / Pi 3 (`main`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git fetch origin && git checkout main && git pull origin main
+>   ```
+>
+> * **Para la rama con el desarrollo web puro (`web-control`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git fetch origin && git checkout web-control && git pull origin web-control
+>   ```
+>
+> ---
+> **📱 CÓMO ACCEDER AL CONTROL WEB DESDE LA TABLET SAMSUNG:**
+> 1. Conectá la tablet a la misma red Wi-Fi de las Raspberry Pi.
+> 2. Abrí Chrome y navegá a: **`http://<IP_DE_CUALQUIER_PI>:8080`**
+> 3. Ingresá el **PIN: `1234`** (configurable desde AutoPlay Studio).
+> 4. *(Opcional)* En Chrome tocá `⋮` $\rightarrow$ **"Agregar a la pantalla principal"** para usarla a pantalla completa como una app.
 
 ---
 
-**AutoPlay Studio (Edición Scarlett 8i6)** es la versión de **AutoPlay Studio** especialmente diseñada para controlar y rutear automáticamente una interfaz **Focusrite Scarlett 8i6** (1st o 3rd Gen) en **Raspberry Pi 5 (Raspberry Pi OS Bookworm)**, entregando **6 salidas de audio simultáneas**:
+## 🔊 Focusrite Scarlett 8i6 (6 Salidas Simultáneas)
+
+**AutoPlay Studio (Edición Scarlett 8i6)** controla y rutea automáticamente una interfaz **Focusrite Scarlett 8i6** (1st o 3rd Gen) en **Raspberry Pi 5 (Raspberry Pi OS Bookworm)**, entregando **6 salidas de audio simultáneas**:
 - **Salidas Analógicas 1-2 (L / R)**: Par de monitores / PA estéreo principal.
 - **Salidas Analógicas 3-4 (L / R)**: Segundo par estéreo para refuerzo de sala o instalación.
 - **Salidas Digitales S/PDIF 5-6 (Mono)**: Suma monofónica `L + R` dedicada para Subwoofer (ej: **Samson Resolv 10s / Samson MediaOne 10"**).
 
----
-
-## 🎛️ Ruteo de Hardware en el DSP de la Scarlett 8i6
-
+### Ruteo de Hardware en el DSP de la Scarlett 8i6
 La aplicación configura directamente los registros ALSA (`amixer`) del controlador del kernel `scarlett2`:
 1. **Ruteo Interno sin pérdida**: Los canales `PCM 1` (L) y `PCM 2` (R) del sistema operativo se asignan como entradas maestras de la matriz de la placa, ruteándose simultáneamente hacia los 6 Mixes de hardware (`Mix A` a `Mix F`).
 2. **Control Independiente de 3 Zonas**: Desde la interfaz podés regular en tiempo real:
@@ -25,6 +48,8 @@ La aplicación configura directamente los registros ALSA (`amixer`) del controla
    - Ganancia Subwoofer S/PDIF (`scarlett_gain_sub`: 0% a 200%).
 3. **Boost DSP Paralelo (+12 dB)**: Cuando un fader supera el 100%, activa un bus paralelo en el DSP de la interfaz sumando hasta +12 dB analógicos limpios sin distorsión.
 4. **Filtro Anti-Saturación (`dynaudnorm` + `alimiter`)**: Mantiene el rango dinámico de las obras y previene clips en el conversor DAC.
+
+---
 
 ---
 
