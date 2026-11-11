@@ -27,6 +27,26 @@
 >
 > ---
 >
+> ### 🧹 INSTALACIÓN LIMPIA DIRECTA (SI TE DICE "NOT AN EMPTY DIRECTORY"):
+> Si te tira error de directorio o querés reinstalar limpio desde cero borrando versiones viejas:
+>
+> * **🎛️ Para la Raspberry Pi con Scarlett 8i6 (`Pi+Scarlett`):**
+>   ```bash
+>   rm -rf ~/vlc-autoplay-studio && git clone -b Pi+Scarlett https://github.com/chuledp/pi5_KIOSK_ANDREANI.git ~/vlc-autoplay-studio && cd ~/vlc-autoplay-studio && ./run.sh
+>   ```
+>
+> * **📽️ Para las Raspberry Pi 5 con Doble Proyector Optoma (`DUAL-OPTOMA`):**
+>   ```bash
+>   rm -rf ~/vlc-autoplay-studio && git clone -b DUAL-OPTOMA https://github.com/chuledp/pi5_KIOSK_ANDREANI.git ~/vlc-autoplay-studio && cd ~/vlc-autoplay-studio && ./run.sh
+>   ```
+>
+> * **📺 Para las Raspberry Pi estándar / Pi 3 (`main`):**
+>   ```bash
+>   rm -rf ~/vlc-autoplay-studio && git clone -b main https://github.com/chuledp/pi5_KIOSK_ANDREANI.git ~/vlc-autoplay-studio && cd ~/vlc-autoplay-studio && ./run.sh
+>   ```
+>
+> ---
+>
 > ### ⚡ Si vas a instalar de cero en una nueva Raspberry Pi (One-Liner):
 > * **Rama Optoma Dual:** `curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/DUAL-OPTOMA/quick-install.sh | bash`
 > * **Rama Scarlett:** `curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/Pi%2BScarlett/quick-install.sh | bash`
