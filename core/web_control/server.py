@@ -70,9 +70,14 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
         except Exception:
             return {}
 
+    @property
+    def web_control(self) -> 'WebControlServer':
+        """Obtiene la referencia a la instancia WebControlServer asociada."""
+        return getattr(self.server, "web_control", getattr(self.server, "server", self.server))
+
     def _is_authenticated(self, data: Optional[Dict[str, Any]] = None) -> bool:
         """Verifica si la petición está autorizada con el PIN configurado."""
-        if not self.server.pin:
+        if not self.web_control.pin:
             return True  # Sin PIN requerido
 
         token = ""
@@ -81,7 +86,7 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
         if not token:
             token = self.headers.get("X-Kiosk-Token", "").strip()
 
-        return self.server.verify_token(token)
+        return self.web_control.verify_token(token)
 
     def do_GET(self):
         path = self.path.split("?")[0]
@@ -112,12 +117,12 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/devices":
             # Si el beacon está activo, enviar un ping rápido si la lista está vacía
-            devices = self.server.registry.get_devices()
+            devices = self.web_control.registry.get_devices()
             self._send_json({
                 "success": True,
                 "server_time": time.time(),
-                "local_id": self.server.local_device_id,
-                "has_pin": bool(self.server.pin),
+                "local_id": self.web_control.local_device_id,
+                "has_pin": bool(self.web_control.pin),
                 "devices": devices
             })
             return
@@ -130,8 +135,8 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/auth":
             pin = str(data.get("pin", "")).strip()
-            if self.server.validate_pin(pin):
-                token = self.server.generate_token()
+            if self.web_control.validate_pin(pin):
+                token = self.web_control.generate_token()
                 self._send_json({"success": True, "token": token})
             else:
                 self._send_json({"success": False, "error": "PIN incorrecto"}, status=401)
@@ -148,7 +153,7 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
             device_id = str(data.get("device_id", ""))
             value = data.get("value")
 
-            result = self.server.dispatch_command(
+            result = self.web_control.dispatch_command(
                 action=action,
                 target=target,
                 floor=floor,
@@ -215,7 +220,16 @@ class WebControlServer:
             handler_class = WebControlRequestHandler
             self._server = ReusableThreadingHTTPServer(("0.0.0.0", self.port), handler_class)
             # Inyectar referencia de self en la instancia del servidor para que el handler acceda
+            self._server.web_control = self  # type: ignore
             self._server.server = self  # type: ignore
+            self._server.registry = self.registry  # type: ignore
+            self._server.beacon = self.beacon  # type: ignore
+            self._server.local_device_id = self.local_device_id  # type: ignore
+            self._server.pin = self.pin  # type: ignore
+            self._server.validate_pin = self.validate_pin  # type: ignore
+            self._server.generate_token = self.generate_token  # type: ignore
+            self._server.verify_token = self.verify_token  # type: ignore
+            self._server.dispatch_command = self.dispatch_command  # type: ignore
 
             self._server_thread = threading.Thread(
                 target=self._server.serve_forever,
