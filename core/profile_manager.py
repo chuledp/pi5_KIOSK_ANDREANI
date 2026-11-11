@@ -49,7 +49,7 @@ def create_default_profile(name: str = "Mi Instalación") -> Dict[str, Any]:
         "device_floor": "Planta Baja",  # "Planta Baja", "1er Piso", "2do Piso"
         "web_control_enabled": True,
         "web_control_port": 8080,
-        "web_control_pin": "1234"
+        "web_control_pin": ""
     }
 
 class ProfileManager:
@@ -109,8 +109,8 @@ class ProfileManager:
                             p["web_control_enabled"] = True
                         if "web_control_port" not in p:
                             p["web_control_port"] = 8080
-                        if "web_control_pin" not in p:
-                            p["web_control_pin"] = "1234"
+                        if "web_control_pin" not in p or p.get("web_control_pin") == "1234":
+                            p["web_control_pin"] = ""
                     self.data["profiles"] = profiles
             except Exception as e:
                 print(f"Error cargando configuración: {e}")

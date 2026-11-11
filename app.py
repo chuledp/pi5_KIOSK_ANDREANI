@@ -946,14 +946,15 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_web_control_enabled.set(prof.get("web_control_enabled", True))
 
         self.entry_web_pin.delete(0, tk.END)
-        self.entry_web_pin.insert(0, str(prof.get("web_control_pin", "1234")))
+        current_pin = str(prof.get("web_control_pin", "") or "")
+        self.entry_web_pin.insert(0, current_pin)
 
         local_ip = self.local_ip
         web_port = prof.get("web_control_port", 8080)
-        pin_val = str(prof.get("web_control_pin", "1234"))
+        pin_label = f"PIN: {current_pin}" if current_pin else "Acceso Libre / Sin PIN"
         self.lbl_web_url.config(text=f"http://{local_ip}:{web_port}")
         if hasattr(self, "lbl_net_ip_info"):
-            self.lbl_net_ip_info.config(text=f"📍 IP de esta Pi: {local_ip}  |  📱 Panel Tablet: http://{local_ip}:{web_port} (PIN: {pin_val})")
+            self.lbl_net_ip_info.config(text=f"📍 IP de esta Pi: {local_ip}  |  📱 Panel Tablet: http://{local_ip}:{web_port} ({pin_label})")
         if hasattr(self, "lbl_header_ip"):
             self.lbl_header_ip.config(text=f"🌐 IP: {local_ip}")
 
@@ -1020,7 +1021,7 @@ class VLCAutoPlayApp(tk.Tk):
             "device_name": self.entry_device_name.get().strip() or "Sala",
             "device_floor": self.var_device_floor.get(),
             "web_control_enabled": self.var_web_control_enabled.get(),
-            "web_control_pin": self.entry_web_pin.get().strip() or "1234"
+            "web_control_pin": self.entry_web_pin.get().strip()
         }
 
         self.profile_mgr.update_profile(self.current_profile_id, updates)
@@ -1034,7 +1035,7 @@ class VLCAutoPlayApp(tk.Tk):
         if self.web_server is None or self.web_server.port != cur_port or not self.var_web_control_enabled.get():
             self._start_or_restart_web_control()
         else:
-            self.web_server.pin = self.entry_web_pin.get().strip() or "1234"
+            self.web_server.pin = self.entry_web_pin.get().strip()
 
         self.set_status("Configuración guardada.")
 

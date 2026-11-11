@@ -77,8 +77,9 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
 
     def _is_authenticated(self, data: Optional[Dict[str, Any]] = None) -> bool:
         """Verifica si la petición está autorizada con el PIN configurado."""
-        if not self.web_control.pin:
-            return True  # Sin PIN requerido
+        pin = self.web_control.pin if self.web_control else ""
+        if not pin or not pin.strip():
+            return True  # Sin PIN requerido: acceso libre inmediato
 
         token = ""
         if data and "token" in data:
@@ -117,12 +118,13 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/devices":
             # Si el beacon está activo, enviar un ping rápido si la lista está vacía
+            pin = (self.web_control.pin if self.web_control else "").strip()
             devices = self.web_control.registry.get_devices()
             self._send_json({
                 "success": True,
                 "server_time": time.time(),
                 "local_id": self.web_control.local_device_id,
-                "has_pin": bool(self.web_control.pin),
+                "has_pin": bool(pin),
                 "devices": devices
             })
             return
@@ -175,14 +177,14 @@ class WebControlServer:
         registry: DeviceRegistry,
         beacon: DeviceBeacon,
         local_device_id: str,
-        pin: str = "1234",
+        pin: str = "",
         port: int = 8080,
         local_command_handler: Optional[Callable[[str, Any], bool]] = None
     ):
         self.registry = registry
         self.beacon = beacon
         self.local_device_id = local_device_id
-        self.pin = pin.strip()
+        self.pin = (pin or "").strip()
         self.port = port
         self.local_command_handler = local_command_handler
 
@@ -427,7 +429,7 @@ def start_web_control(
         return None
 
     port = int(profile.get("web_control_port", 8080))
-    pin = str(profile.get("web_control_pin", "1234"))
+    pin = str(profile.get("web_control_pin", "")).strip()
     device_id = str(profile.get("id", "pi-node"))
 
     registry = DeviceRegistry()
