@@ -77,6 +77,7 @@ class VLCAutoPlayApp(tk.Tk):
         # Inicializar managers
         self.profile_mgr = ProfileManager()
         self.autostart_mgr = AutostartManager()
+        self.local_ip = get_local_ip()
         
         self.current_profile_id: Optional[str] = None
         self.active_daemon: Optional[SyncDaemon] = None
@@ -158,13 +159,12 @@ class VLCAutoPlayApp(tk.Tk):
         self.lbl_badge_text.pack(side=tk.LEFT)
 
         # Badge destacado de IP Local para conectar la Tablet Samsung
-        local_ip = get_local_ip()
         self.ip_badge_frame = tk.Frame(header_frame, bg=THEME["card"], padx=12, pady=6, bd=1, relief="solid")
         self.ip_badge_frame.pack(side=tk.RIGHT, padx=(0, 10))
 
         self.lbl_header_ip = tk.Label(
             self.ip_badge_frame,
-            text=f"🌐 IP: {local_ip}",
+            text=f"🌐 IP: {self.local_ip}",
             font=("Helvetica", 10, "bold"),
             bg=THEME["card"],
             fg=THEME["primary"]
@@ -172,6 +172,7 @@ class VLCAutoPlayApp(tk.Tk):
         self.lbl_header_ip.pack(side=tk.LEFT)
 
     def _build_main_layout(self):
+        local_ip = self.local_ip
         container = tk.Frame(self, bg=THEME["bg"], padx=14, pady=10)
         container.pack(fill=tk.BOTH, expand=True)
 
@@ -938,7 +939,7 @@ class VLCAutoPlayApp(tk.Tk):
         self.entry_web_pin.delete(0, tk.END)
         self.entry_web_pin.insert(0, str(prof.get("web_control_pin", "1234")))
 
-        local_ip = get_local_ip()
+        local_ip = self.local_ip
         web_port = prof.get("web_control_port", 8080)
         pin_val = str(prof.get("web_control_pin", "1234"))
         self.lbl_web_url.config(text=f"http://{local_ip}:{web_port}")
@@ -1015,22 +1016,22 @@ class VLCAutoPlayApp(tk.Tk):
 
         self.profile_mgr.update_profile(self.current_profile_id, updates)
 
+        active = self.profile_mgr.get_active_profile()
+        if active and active["id"] == self.current_profile_id and self.profile_mgr.is_autostart_enabled():
+            self.autostart_mgr.enable(active)
+
+        self.set_status("Configuración guardada.")
+
     def open_web_control_browser(self):
         prof = self.profile_mgr.get_profile(self.current_profile_id) or {}
         port = prof.get("web_control_port", 8080)
-        ip = get_local_ip()
+        ip = self.local_ip
         url = f"http://{ip}:{port}"
         try:
             webbrowser.open(url)
             self.set_status(f"Abriendo control web en: {url}")
         except Exception:
             pass
-        
-        active = self.profile_mgr.get_active_profile()
-        if active and active["id"] == self.current_profile_id and self.profile_mgr.is_autostart_enabled():
-            self.autostart_mgr.enable(active)
-
-        self.set_status("Configuración guardada.")
 
     def action_new_profile(self):
         new_prof = self.profile_mgr.add_profile("Nueva Instalación")
