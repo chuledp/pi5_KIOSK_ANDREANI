@@ -106,8 +106,9 @@ class MPVController:
             scarlett_info = detect_scarlett_card() if (HAS_SCARLETT and scarlett_enabled) else {"found": False}
 
             if HAS_SCARLETT and scarlett_enabled and scarlett_info.get("found"):
-                # Asignar la interfaz USB Scarlett directamente en MPV
+                # Asignar la interfaz USB Scarlett directamente en MPV con fallback de seguridad
                 cmd.append(f"--audio-device={scarlett_info['mpv_device']}")
+                cmd.append("--audio-fallback=yes")
                 cmd.append("--audio-channels=auto-safe")
                 set_default_scarlett_sink()
                 af_str = build_mpv_audio_filter(profile)
