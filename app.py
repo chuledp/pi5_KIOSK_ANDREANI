@@ -22,6 +22,16 @@ from core.dual_display import detect_hdmi_outputs, enable_dual_hdmi_mirror
 from core.sync_runner import SyncDaemon
 from core.osc_receiver import OSCReceiver
 from core.web_control.discovery import get_local_ip
+try:
+    from core.scarlett_mixer import (
+        detect_scarlett_card,
+        configure_scarlett_8i6_hardware,
+        apply_scarlett_mix_levels,
+        launch_scarlett_gui,
+    )
+    HAS_SCARLETT_GUI = True
+except ImportError:
+    HAS_SCARLETT_GUI = False
 
 # Paleta de colores Dark Theme Profesional
 THEME = {
@@ -53,9 +63,9 @@ class VLCAutoPlayApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("AutoPlay Studio - Dual Optoma HDMI + Sync & OSC (Raspberry Pi 5)")
-        self.geometry("1040x820")
-        self.minsize(920, 720)
+        self.title("AutoPlay Studio • Pi 5 + Focusrite Scarlett 8i6 (6 Salidas & OSC)")
+        self.geometry("1040x830")
+        self.minsize(940, 740)
         self.configure(bg=THEME["bg"])
 
         # Inicializar managers
@@ -140,6 +150,20 @@ class VLCAutoPlayApp(tk.Tk):
             fg=THEME["text"]
         )
         self.lbl_badge_text.pack(side=tk.LEFT)
+
+        # Badge destacado de IP Local para conectar la Tablet Samsung
+        local_ip = get_local_ip()
+        self.ip_badge_frame = tk.Frame(header_frame, bg=THEME["card"], padx=12, pady=6, bd=1, relief="solid")
+        self.ip_badge_frame.pack(side=tk.RIGHT, padx=(0, 10))
+
+        self.lbl_header_ip = tk.Label(
+            self.ip_badge_frame,
+            text=f"🌐 IP: {local_ip}",
+            font=("Helvetica", 10, "bold"),
+            bg=THEME["card"],
+            fg=THEME["primary"]
+        )
+        self.lbl_header_ip.pack(side=tk.LEFT)
 
     def _build_main_layout(self):
         container = tk.Frame(self, bg=THEME["bg"], padx=14, pady=10)
@@ -328,8 +352,21 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_engine = tk.StringVar(value="mpv")
         self.var_hwdec_mode = tk.StringVar(value="drm-copy")
 
+        # Banner informativo destacado de IP Local y Acceso Tablet
+        net_info_box = tk.Frame(card_net, bg=THEME["surface"], padx=10, pady=6)
+        net_info_box.pack(fill=tk.X, pady=(4, 6))
+
+        self.lbl_net_ip_info = tk.Label(
+            net_info_box,
+            text=f"📍 IP de esta Pi: {local_ip}  |  📱 Panel Tablet: http://{local_ip}:8080 (PIN: 1234)",
+            bg=THEME["surface"],
+            fg=THEME["success"],
+            font=("Helvetica", 9, "bold")
+        )
+        self.lbl_net_ip_info.pack(side=tk.LEFT)
+
         roles_row = tk.Frame(card_net, bg=THEME["card"])
-        roles_row.pack(fill=tk.X, pady=(6, 4))
+        roles_row.pack(fill=tk.X, pady=(4, 4))
 
         rb1 = ttk.Radiobutton(
             roles_row,
@@ -451,6 +488,10 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_hide_mouse = tk.BooleanVar(value=True)
         self.var_no_audio = tk.BooleanVar(value=False)
         self.var_audio_boost = tk.BooleanVar(value=True)
+        self.var_scarlett_enabled = tk.BooleanVar(value=True)
+        self.var_scarlett_12 = tk.IntVar(value=120)
+        self.var_scarlett_34 = tk.IntVar(value=120)
+        self.var_scarlett_sub = tk.IntVar(value=130)
         self.var_dual_hdmi = tk.BooleanVar(value=True)
         self.var_dual_mode = tk.StringVar(value="mirror")
         self.var_dual_res = tk.StringVar(value="auto")
@@ -549,6 +590,72 @@ class VLCAutoPlayApp(tk.Tk):
         scale_vol = ttk.Scale(f_vol, from_=0, to=300, orient="horizontal", variable=self.var_volume, command=self._on_vol_slide)
         scale_vol.pack(fill=tk.X)
 
+        # Sub-panel Focusrite Scarlett 8i6 (6 Salidas: 4 Analógicas + S/PDIF Subwoofer)
+        scarlett_box = tk.Frame(card_opts, bg=THEME["surface"], padx=10, pady=8, bd=1, relief="solid")
+        scarlett_box.pack(fill=tk.X, pady=(8, 0))
+
+        scarlett_top = tk.Frame(scarlett_box, bg=THEME["surface"])
+        scarlett_top.pack(fill=tk.X)
+
+        cb_scarlett = ttk.Checkbutton(
+            scarlett_top,
+            text="🎛️ Ruteo Scarlett 8i6 (6 Salidas: Line 1-4 + S/PDIF Sub Samson 10\")",
+            variable=self.var_scarlett_enabled,
+            command=self._on_scarlett_toggle,
+            style="Card.TCheckbutton"
+        )
+        cb_scarlett.pack(side=tk.LEFT)
+
+        btn_scarlett_gui = tk.Button(
+            scarlett_top,
+            text="🎚️ Abrir Scarlett GUI",
+            command=self.action_open_scarlett_gui,
+            bg=THEME["card_border"],
+            fg=THEME["text"],
+            relief="flat",
+            font=("Helvetica", 8, "bold"),
+            cursor="hand2",
+            padx=8,
+            pady=2
+        )
+        btn_scarlett_gui.pack(side=tk.RIGHT, padx=(6, 0))
+
+        btn_scarlett_route = tk.Button(
+            scarlett_top,
+            text="⚡ Auto-Rutear Scarlett (Mixes)",
+            command=self.action_auto_route_scarlett,
+            bg=THEME["purple"],
+            fg="#ffffff",
+            relief="flat",
+            font=("Helvetica", 8, "bold"),
+            cursor="hand2",
+            padx=8,
+            pady=2
+        )
+        btn_scarlett_route.pack(side=tk.RIGHT)
+
+        # 3 Sliders de Ganancia por Par de Salidas (1-2, 3-4, Sub S/PDIF 5-6)
+        scarlett_sliders = tk.Frame(scarlett_box, bg=THEME["surface"])
+        scarlett_sliders.pack(fill=tk.X, pady=(6, 0))
+
+        f_s12 = tk.Frame(scarlett_sliders, bg=THEME["surface"])
+        f_s12.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.lbl_s12 = tk.Label(f_s12, text="Analógicas 1-2 (L/R): 120%", bg=THEME["surface"], fg=THEME["text"], font=("Helvetica", 8, "bold"))
+        self.lbl_s12.pack(anchor="w")
+        ttk.Scale(f_s12, from_=0, to=200, orient="horizontal", variable=self.var_scarlett_12, command=self._on_scarlett_slide).pack(fill=tk.X)
+
+        f_s34 = tk.Frame(scarlett_sliders, bg=THEME["surface"])
+        f_s34.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.lbl_s34 = tk.Label(f_s34, text="Analógicas 3-4 (L/R): 120%", bg=THEME["surface"], fg=THEME["text"], font=("Helvetica", 8, "bold"))
+        self.lbl_s34.pack(anchor="w")
+        ttk.Scale(f_s34, from_=0, to=200, orient="horizontal", variable=self.var_scarlett_34, command=self._on_scarlett_slide).pack(fill=tk.X)
+
+        f_ssub = tk.Frame(scarlett_sliders, bg=THEME["surface"])
+        f_ssub.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.lbl_ssub = tk.Label(f_ssub, text="Sub S/PDIF 5-6 (Mono): 130%", bg=THEME["surface"], fg=THEME["amber"], font=("Helvetica", 8, "bold"))
+        self.lbl_ssub.pack(anchor="w")
+        ttk.Scale(f_ssub, from_=0, to=200, orient="horizontal", variable=self.var_scarlett_sub, command=self._on_scarlett_slide).pack(fill=tk.X)
+
         # Tarjeta 5: Botones de Acción
         card_actions = tk.Frame(right_col, bg=THEME["surface"], padx=14, pady=10, bd=1, relief="ridge")
         card_actions.pack(fill=tk.BOTH, expand=True)
@@ -617,7 +724,9 @@ class VLCAutoPlayApp(tk.Tk):
         self.lbl_status.pack(side=tk.LEFT)
 
         bins = detect_binaries()
-        status_txt = f"Motores: MPV [{'OK' if bins['mpv'] else 'Falta'}] | VLC [{'OK' if bins['vlc'] else 'Falta'}]"
+        sc_info = detect_scarlett_card()
+        sc_txt = f"Scarlett [{sc_info['card_id']}]" if sc_info["found"] else "Scarlett [Sin detectar]"
+        status_txt = f"{sc_txt} | Motores: MPV [{'OK' if bins['mpv'] else 'Falta'}] | VLC [{'OK' if bins['vlc'] else 'Falta'}]"
         lbl_bins = tk.Label(footer, text=status_txt, bg=THEME["bg"], fg=THEME["text_dim"], font=("Helvetica", 8))
         lbl_bins.pack(side=tk.RIGHT)
 
@@ -655,7 +764,65 @@ class VLCAutoPlayApp(tk.Tk):
     def _on_audio_boost_toggle(self):
         self.save_current_settings()
         if self.active_daemon and self.active_daemon.mpv.is_running():
-            self.active_daemon.mpv.set_audio_boost(self.var_audio_boost.get())
+            prof = self.profile_mgr.get_profile(self.current_profile_id)
+            if prof:
+                self.active_daemon.mpv.update_audio_routing(prof)
+
+    def _update_scarlett_labels(self, g12: int, g34: int, gsub: int):
+        self.lbl_s12.config(
+            text=f"Analógicas 1-2 (L/R): {g12}%",
+            fg=THEME["amber"] if g12 > 100 else THEME["text"]
+        )
+        self.lbl_s34.config(
+            text=f"Analógicas 3-4 (L/R): {g34}%",
+            fg=THEME["amber"] if g34 > 100 else THEME["text"]
+        )
+        self.lbl_ssub.config(
+            text=f"Sub S/PDIF 5-6 (Mono): {gsub}%",
+            fg=THEME["amber"] if gsub > 100 else THEME["text"]
+        )
+
+    def _on_scarlett_slide(self, _val=None):
+        g12 = int(float(self.var_scarlett_12.get()))
+        g34 = int(float(self.var_scarlett_34.get()))
+        gsub = int(float(self.var_scarlett_sub.get()))
+        self._update_scarlett_labels(g12, g34, gsub)
+        self.save_current_settings()
+
+        if self.current_profile_id:
+            prof = self.profile_mgr.get_profile(self.current_profile_id)
+            if prof:
+                if self.active_daemon and self.active_daemon.mpv.is_running():
+                    self.active_daemon.mpv.update_audio_routing(prof)
+                elif prof.get("scarlett_enabled", True):
+                    apply_scarlett_mix_levels(prof)
+
+    def _on_scarlett_toggle(self):
+        self.save_current_settings()
+        if self.current_profile_id:
+            prof = self.profile_mgr.get_profile(self.current_profile_id)
+            if prof:
+                if prof.get("scarlett_enabled", True):
+                    configure_scarlett_8i6_hardware(prof)
+                if self.active_daemon and self.active_daemon.mpv.is_running():
+                    self.active_daemon.mpv.update_audio_routing(prof)
+
+    def action_auto_route_scarlett(self):
+        self.save_current_settings()
+        prof = self.profile_mgr.get_profile(self.current_profile_id) if self.current_profile_id else {}
+        ok, msg = configure_scarlett_8i6_hardware(prof)
+        if ok:
+            self.set_status(msg)
+            messagebox.showinfo("Scarlett 8i6 Configurada", msg)
+        else:
+            self.set_status(msg)
+            messagebox.showwarning("Scarlett 8i6", msg)
+
+    def action_open_scarlett_gui(self):
+        ok, msg = launch_scarlett_gui()
+        self.set_status(msg)
+        if not ok:
+            messagebox.showinfo("alsa-scarlett-gui", msg)
 
     def _on_dual_hdmi_toggle(self):
         self.save_current_settings()
@@ -727,6 +894,17 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_hide_mouse.set(prof.get("hide_mouse", True))
         self.var_no_audio.set(prof.get("no_audio", False))
         self.var_audio_boost.set(prof.get("audio_boost", True))
+        self.var_scarlett_enabled.set(prof.get("scarlett_enabled", True))
+
+        g12 = int(prof.get("scarlett_gain_12", 120))
+        g34 = int(prof.get("scarlett_gain_34", 120))
+        gsub = int(prof.get("scarlett_gain_sub", 130))
+        self.var_scarlett_12.set(g12)
+        self.var_scarlett_34.set(g34)
+        self.var_scarlett_sub.set(gsub)
+        if hasattr(self, "_update_scarlett_labels"):
+            self._update_scarlett_labels(g12, g34, gsub)
+
         self.var_dual_hdmi.set(prof.get("dual_hdmi_enabled", True))
         self.var_dual_mode.set(prof.get("dual_hdmi_mode", "mirror"))
         self.var_dual_res.set(prof.get("dual_hdmi_resolution", "auto"))
@@ -756,7 +934,12 @@ class VLCAutoPlayApp(tk.Tk):
 
         local_ip = get_local_ip()
         web_port = prof.get("web_control_port", 8080)
+        pin_val = str(prof.get("web_control_pin", "1234"))
         self.lbl_web_url.config(text=f"http://{local_ip}:{web_port}")
+        if hasattr(self, "lbl_net_ip_info"):
+            self.lbl_net_ip_info.config(text=f"📍 IP de esta Pi: {local_ip}  |  📱 Panel Tablet: http://{local_ip}:{web_port} (PIN: {pin_val})")
+        if hasattr(self, "lbl_header_ip"):
+            self.lbl_header_ip.config(text=f"🌐 IP: {local_ip}")
 
         self.on_role_change()
 
@@ -809,6 +992,10 @@ class VLCAutoPlayApp(tk.Tk):
             "hide_mouse": self.var_hide_mouse.get(),
             "no_audio": self.var_no_audio.get(),
             "audio_boost": self.var_audio_boost.get(),
+            "scarlett_enabled": self.var_scarlett_enabled.get(),
+            "scarlett_gain_12": int(self.var_scarlett_12.get()),
+            "scarlett_gain_34": int(self.var_scarlett_34.get()),
+            "scarlett_gain_sub": int(self.var_scarlett_sub.get()),
             "dual_hdmi_enabled": self.var_dual_hdmi.get(),
             "dual_hdmi_mode": self.var_dual_mode.get(),
             "dual_hdmi_resolution": self.var_dual_res.get(),
@@ -1083,7 +1270,19 @@ class VLCAutoPlayApp(tk.Tk):
         self.set_status(f"Iniciando prueba en modo {prof.get('network_role', 'follower').upper()}...")
         try:
             self.active_daemon = SyncDaemon(self.profile_mgr)
-            self.active_daemon.start(profile_id=self.current_profile_id)
+            started = self.active_daemon.start(profile_id=self.current_profile_id)
+            if started is False:
+                messagebox.showerror(
+                    "Error de Reproducción",
+                    "No se pudo iniciar el reproductor MPV o VLC.\nVerificá que el archivo de medios sea legible y que los reproductores estén instalados."
+                )
+                self.active_daemon.stop()
+                self.active_daemon = None
+                self.btn_test.config(text="▶ Probar Reproducción / Sync Ahora", bg=THEME["primary"])
+                self.set_status("Error iniciando reproducción.")
+                self._restart_live_osc_listener()
+                return
+
             self.btn_test.config(text="⏹ Detener Prueba", bg=THEME["danger"])
             self.set_status(f"Prueba en curso con perfil '{prof['name']}'. Enviá comandos OSC al puerto {prof.get('osc_port', 9000)}.")
         except Exception as e:
