@@ -731,8 +731,14 @@ class VLCAutoPlayApp(tk.Tk):
         self.lbl_status.pack(side=tk.LEFT)
 
         bins = detect_binaries()
-        sc_info = detect_scarlett_card()
-        sc_txt = f"Scarlett [{sc_info['card_id']}]" if sc_info["found"] else "Scarlett [Sin detectar]"
+        if HAS_SCARLETT_GUI:
+            try:
+                sc_info = detect_scarlett_card()
+                sc_txt = f"Scarlett [{sc_info['card_id']}]" if sc_info.get("found") else "Scarlett [Sin detectar]"
+            except Exception:
+                sc_txt = "Audio Estándar"
+        else:
+            sc_txt = "Audio Estándar"
         status_txt = f"{sc_txt} | Motores: MPV [{'OK' if bins['mpv'] else 'Falta'}] | VLC [{'OK' if bins['vlc'] else 'Falta'}]"
         lbl_bins = tk.Label(footer, text=status_txt, bg=THEME["bg"], fg=THEME["text_dim"], font=("Helvetica", 8))
         lbl_bins.pack(side=tk.RIGHT)

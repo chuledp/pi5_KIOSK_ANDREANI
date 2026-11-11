@@ -62,6 +62,14 @@ class SyncDaemon:
         # Asegurar que ambas salidas HDMI (HDMI-A-1 y HDMI-A-2) estén encendidas y espejadas
         enable_dual_hdmi_mirror(prof)
 
+        # Configurar DSP de la Scarlett 8i6 si está presente y activa
+        if prof.get("scarlett_enabled", True):
+            try:
+                from core.scarlett_mixer import configure_scarlett_8i6_hardware
+                configure_scarlett_8i6_hardware(prof)
+            except Exception:
+                pass
+
         print(f"Iniciando SyncDaemon con perfil '{prof['name']}' (Rol: {role.upper()}, Motor: {engine.upper()}, Puerto: {port})")
 
         # 1. Iniciar reproductor según rol y motor elegido

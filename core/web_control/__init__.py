@@ -7,3 +7,4 @@ from core.web_control.discovery import DeviceRegistry, DeviceBeacon
 from core.web_control.server import WebControlServer, start_web_control
 
 __all__ = ["DeviceRegistry", "DeviceBeacon", "WebControlServer", "start_web_control"]
+
