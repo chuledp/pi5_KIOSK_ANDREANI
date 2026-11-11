@@ -1,30 +1,29 @@
 # 🎬 AutoPlay Studio • KIOSK ANDREANI (Multi-Pi & Control Web)
 
-> ## 🚀 COMANDOS DE ACTUALIZACIÓN (`git pull`) PARA CADA RASPBERRY PI
-> Copiá y pegá el comando que corresponda en la terminal de cada Raspberry Pi.
-> *(Incluye `git fetch`, cambio de rama y pull limpio de la última versión con reinicio de la app)*:
->
-> ### 1️⃣ Para las Raspberry Pi 5 con Doble Proyector Optoma (`DUAL-OPTOMA`):
+> ## ⚡ ACTUALIZACIÓN DIRECTA (UN SOLO CLIC / COPIAR Y PEGAR)
+> Si ya estás en la Raspberry Pi, copiá y pegá este comando directo:
 > ```bash
-> cd ~/vlc-autoplay-studio && git fetch origin && git checkout DUAL-OPTOMA && git pull origin DUAL-OPTOMA && ./run.sh
+> cd ~/vlc-autoplay-studio && git pull && ./run.sh
 > ```
-> *(Soporte 4K @ 60Hz / 30Hz, doble micro-HDMI clonado, auto-detección de resolución común y control web)*
 >
 > ---
 >
-> ### 2️⃣ Para la Raspberry Pi con Placa Focusrite Scarlett (`Pi+Scarlett`):
-> ```bash
-> cd ~/vlc-autoplay-studio && git fetch origin && git checkout Pi+Scarlett && git pull origin Pi+Scarlett && ./run.sh
-> ```
-> *(Ruteo de 6 canales en el DSP de la Scarlett 8i6, ganancia independiente, salida Subwoofer y control web)*
+> ### 🔄 Si necesitás cambiar de rama o forzar la actualización específica:
 >
-> ---
+> * **1️⃣ Para Raspberry Pi 5 con Doble Proyector Optoma (`DUAL-OPTOMA`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git checkout DUAL-OPTOMA && git pull origin DUAL-OPTOMA && ./run.sh
+>   ```
 >
-> ### 3️⃣ Para las demás Raspberry Pi estándar / Pi 3 (`main`):
-> ```bash
-> cd ~/vlc-autoplay-studio && git fetch origin && git checkout main && git pull origin main && ./run.sh
-> ```
-> *(Configuración estándar mono-pantalla HDMI, audio estéreo y control web)*
+> * **2️⃣ Para Raspberry Pi con Focusrite Scarlett 8i6 (`Pi+Scarlett`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git checkout Pi+Scarlett && git pull origin Pi+Scarlett && ./run.sh
+>   ```
+>
+> * **3️⃣ Para Raspberry Pi estándar / Pi 3 (`main`):**
+>   ```bash
+>   cd ~/vlc-autoplay-studio && git checkout main && git pull origin main && ./run.sh
+>   ```
 >
 > ---
 >
