@@ -218,3 +218,4 @@ class DeviceBeacon:
                 if not self._running:
                     break
                 time.sleep(0.1)
+

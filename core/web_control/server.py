@@ -423,3 +423,4 @@ def start_web_control(
 
     beacon.stop()
     return None
+
