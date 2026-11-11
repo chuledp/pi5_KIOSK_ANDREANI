@@ -22,6 +22,7 @@ from core.dual_display import detect_hdmi_outputs, enable_dual_hdmi_mirror
 from core.sync_runner import SyncDaemon
 from core.osc_receiver import OSCReceiver
 from core.web_control.discovery import get_local_ip
+from core.web_control import start_web_control, WebControlServer
 try:
     from core.scarlett_mixer import (
         detect_scarlett_card,
@@ -76,6 +77,7 @@ class VLCAutoPlayApp(tk.Tk):
         self.current_profile_id: Optional[str] = None
         self.active_daemon: Optional[SyncDaemon] = None
         self.live_monitor_receiver: Optional[OSCReceiver] = None
+        self.web_server: Optional[WebControlServer] = None
 
         self._init_styles()
         self._build_header()
@@ -94,6 +96,7 @@ class VLCAutoPlayApp(tk.Tk):
 
         self.update_autostart_badge()
         self._start_live_osc_listener()
+        self._start_or_restart_web_control()
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -1020,6 +1023,13 @@ class VLCAutoPlayApp(tk.Tk):
         if active and active["id"] == self.current_profile_id and self.profile_mgr.is_autostart_enabled():
             self.autostart_mgr.enable(active)
 
+        # Sincronizar o reiniciar servidor Web Control si cambiaron ajustes
+        cur_port = int(updates.get("web_control_port", 8080) if "web_control_port" in updates else 8080)
+        if self.web_server is None or self.web_server.port != cur_port or not self.var_web_control_enabled.get():
+            self._start_or_restart_web_control()
+        else:
+            self.web_server.pin = self.entry_web_pin.get().strip() or "1234"
+
         self.set_status("Configuración guardada.")
 
     def open_web_control_browser(self):
@@ -1193,6 +1203,130 @@ class VLCAutoPlayApp(tk.Tk):
             self.live_monitor_receiver = None
         self._start_live_osc_listener()
 
+    def _start_or_restart_web_control(self):
+        """Inicia o reinicia el servidor web táctil y beacon de auto-descubrimiento en app.py."""
+        if self.web_server:
+            try:
+                self.web_server.stop()
+            except Exception:
+                pass
+            self.web_server = None
+
+        prof = self.profile_mgr.get_profile(self.current_profile_id) if self.current_profile_id else self.profile_mgr.get_active_profile()
+        if not prof:
+            return
+
+        if hasattr(self, "var_web_control_enabled"):
+            web_enabled = self.var_web_control_enabled.get()
+        else:
+            web_enabled = prof.get("web_control_enabled", True)
+
+        if not web_enabled:
+            return
+
+        def get_gui_status() -> Dict[str, Any]:
+            cur_prof = self.profile_mgr.get_profile(self.current_profile_id) if self.current_profile_id else self.profile_mgr.get_active_profile() or prof
+            role = cur_prof.get("network_role", "follower")
+            engine = cur_prof.get("player_engine", "mpv")
+            try:
+                port = int(self.entry_port.get().strip() or str(cur_prof.get("osc_port", 9000)))
+            except Exception:
+                port = int(cur_prof.get("osc_port", 9000))
+
+            dev_name = self.entry_device_name.get().strip() if hasattr(self, "entry_device_name") else ""
+            if not dev_name:
+                dev_name = cur_prof.get("device_name") or cur_prof.get("name", "Raspberry Pi")
+
+            dev_floor = self.var_device_floor.get() if hasattr(self, "var_device_floor") else cur_prof.get("device_floor", "Planta Baja")
+
+            is_running = False
+            is_paused = False
+            time_pos = 0.0
+            duration = 0.0
+            volume = 100
+
+            if self.active_daemon and self.active_daemon.mpv:
+                is_running = self.active_daemon.mpv.is_running()
+                is_paused = self.active_daemon.mpv.is_paused()
+                time_pos = self.active_daemon.mpv.get_time_pos()
+                duration = self.active_daemon.mpv.get_duration()
+                volume = self.active_daemon.mpv.get_volume()
+            else:
+                try:
+                    volume = int(self.var_volume.get())
+                except Exception:
+                    volume = int(cur_prof.get("volume", 100))
+
+            status_str = "offline" if not is_running else ("paused" if is_paused else "playing")
+            file_path = self.entry_file_path.get().strip() if hasattr(self, "entry_file_path") else cur_prof.get("file_path", "")
+
+            return {
+                "id": cur_prof.get("id", "pi-node"),
+                "name": dev_name,
+                "floor": dev_floor,
+                "ip": self.local_ip,
+                "port": int(cur_prof.get("web_control_port", 8080)),
+                "osc_port": port,
+                "status": status_str,
+                "current_file": os.path.basename(file_path) if file_path else "Ninguno",
+                "time_pos": max(0.0, float(time_pos)),
+                "duration": max(0.0, float(duration)),
+                "volume": int(volume),
+                "engine": engine
+            }
+
+        def handle_gui_cmd(action: str, val: Any) -> bool:
+            if action == "play":
+                if self.active_daemon and self.active_daemon.mpv:
+                    self.active_daemon.mpv.play()
+                    return True
+                else:
+                    self.after(0, self.toggle_test_playback)
+                    return True
+            elif action == "pause":
+                if self.active_daemon and self.active_daemon.mpv:
+                    self.active_daemon.mpv.pause()
+                    return True
+            elif action == "toggle":
+                if self.active_daemon and self.active_daemon.mpv:
+                    self.active_daemon.mpv.toggle_pause()
+                    return True
+                else:
+                    self.after(0, self.toggle_test_playback)
+                    return True
+            elif action == "stop":
+                if self.active_daemon:
+                    self.after(0, self.toggle_test_playback)
+                    return True
+            elif action == "reset":
+                if self.active_daemon and self.active_daemon.mpv:
+                    self.active_daemon.mpv.seek(0.0)
+                    self.active_daemon.mpv.play()
+                    return True
+                else:
+                    self.after(0, self.toggle_test_playback)
+                    return True
+            elif action == "seek" and val is not None:
+                if self.active_daemon and self.active_daemon.mpv:
+                    self.active_daemon.mpv.seek(float(val))
+                    return True
+            elif action == "volume" and val is not None:
+                vol = int(val)
+                self.after(0, lambda: self.var_volume.set(vol))
+                if self.active_daemon and self.active_daemon.mpv:
+                    self.active_daemon.mpv.set_volume(vol)
+                    return True
+            return False
+
+        try:
+            self.web_server = start_web_control(
+                profile=prof,
+                status_provider=get_gui_status,
+                local_command_handler=handle_gui_cmd
+            )
+        except Exception as e:
+            print(f"[WebControl] Error iniciando en app.py: {e}")
+
     # ============================================================
     # ARRANQUE AUTOMÁTICO (AUTOSTART)
     # ============================================================
@@ -1276,7 +1410,7 @@ class VLCAutoPlayApp(tk.Tk):
 
         self.set_status(f"Iniciando prueba en modo {prof.get('network_role', 'follower').upper()}...")
         try:
-            self.active_daemon = SyncDaemon(self.profile_mgr)
+            self.active_daemon = SyncDaemon(self.profile_mgr, enable_web_control=False)
             started = self.active_daemon.start(profile_id=self.current_profile_id)
             if started is False:
                 messagebox.showerror(
@@ -1301,6 +1435,12 @@ class VLCAutoPlayApp(tk.Tk):
         self.lbl_status.config(text=text)
 
     def on_close(self):
+        if self.web_server:
+            try:
+                self.web_server.stop()
+            except Exception:
+                pass
+            self.web_server = None
         if self.active_daemon:
             self.active_daemon.stop()
         if self.live_monitor_receiver:

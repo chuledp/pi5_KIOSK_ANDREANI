@@ -31,8 +31,9 @@ def _resolve_vlc_binary() -> str:
     return "cvlc"
 
 class SyncDaemon:
-    def __init__(self, profile_manager: Optional[ProfileManager] = None):
+    def __init__(self, profile_manager: Optional[ProfileManager] = None, enable_web_control: bool = True):
         self.pm = profile_manager or ProfileManager()
+        self.enable_web_control = enable_web_control
         self.mpv = MPVController()
         self.vlc_process: Optional[subprocess.Popen] = None
         self.osc_recv: Optional[OSCReceiver] = None
@@ -144,7 +145,7 @@ class SyncDaemon:
             self.osc_broad.start_clock_sync(self.mpv.get_time_pos, interval=0.15)
 
         # 3. Iniciar Servidor de Control Web para Tablet y Auto-Discovery
-        if prof.get("web_control_enabled", True):
+        if self.enable_web_control and prof.get("web_control_enabled", True):
             def get_local_status() -> dict:
                 is_paused = self.mpv.is_paused() if self.mpv and self.mpv.is_running() else False
                 is_running = self.mpv.is_running() if self.mpv else (self.vlc_process is not None)

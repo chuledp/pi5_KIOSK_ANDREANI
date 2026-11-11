@@ -17,8 +17,13 @@ from typing import Dict, Any, Optional, Callable
 from http.server import HTTPServer, BaseHTTPRequestHandler
 try:
     from http.server import ThreadingHTTPServer
+    _BaseHTTPServer = ThreadingHTTPServer
 except ImportError:
-    ThreadingHTTPServer = HTTPServer  # type: ignore
+    _BaseHTTPServer = HTTPServer  # type: ignore
+
+class ReusableThreadingHTTPServer(_BaseHTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
 
 from core.web_control.discovery import DeviceRegistry, DeviceBeacon, get_local_ip
 from core.osc_receiver import build_osc_message
@@ -206,9 +211,9 @@ class WebControlServer:
 
     def start(self) -> bool:
         try:
-            # Crear servidor HTTP multi-hilo
+            # Crear servidor HTTP multi-hilo con SO_REUSEADDR
             handler_class = WebControlRequestHandler
-            self._server = ThreadingHTTPServer(("0.0.0.0", self.port), handler_class)
+            self._server = ReusableThreadingHTTPServer(("0.0.0.0", self.port), handler_class)
             # Inyectar referencia de self en la instancia del servidor para que el handler acceda
             self._server.server = self  # type: ignore
 
@@ -232,6 +237,11 @@ class WebControlServer:
             except Exception:
                 pass
             self._server = None
+        if self.beacon:
+            try:
+                self.beacon.stop()
+            except Exception:
+                pass
         try:
             self._osc_sock.close()
         except Exception:
