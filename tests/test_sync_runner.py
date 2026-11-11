@@ -21,6 +21,10 @@ class TestSyncRunner(unittest.TestCase):
 
         daemon = SyncDaemon(self.pm)
         self.assertFalse(daemon.is_running)
+        self.assertTrue(daemon.enable_web_control)
+
+        daemon_no_web = SyncDaemon(self.pm, enable_web_control=False)
+        self.assertFalse(daemon_no_web.enable_web_control)
 
     def test_osc_custom_mappings(self):
         p = self.pm.get_active_profile()
