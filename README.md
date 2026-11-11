@@ -1,34 +1,49 @@
 # 🎬 AutoPlay Studio • KIOSK ANDREANI (Multi-Pi & Control Web)
 
-> ### 📱 COMANDOS RÁPIDOS DE `git pull` PARA CADA RASPBERRY PI
-> Copiá y pegá el comando que corresponda en la terminal de cada Raspberry Pi:
+> ## 🚀 COMANDOS DE ACTUALIZACIÓN (`git pull`) PARA CADA RASPBERRY PI
+> Copiá y pegá el comando que corresponda en la terminal de cada Raspberry Pi.
+> *(Incluye `git fetch`, cambio de rama y pull limpio de la última versión con reinicio de la app)*:
 >
-> * **Para las Raspberry Pi 5 con Doble Proyector Optoma (`DUAL-OPTOMA`):**
->   ```bash
->   cd ~/vlc-autoplay-studio && git fetch origin && git checkout DUAL-OPTOMA && git pull origin DUAL-OPTOMA
->   ```
->
-> * **Para las Raspberry Pi con Placa Focusrite Scarlett (`Pi+Scarlett`):**
->   ```bash
->   cd ~/vlc-autoplay-studio && git fetch origin && git checkout Pi+Scarlett && git pull origin Pi+Scarlett
->   ```
->
-> * **Para las Raspberry Pi estándar / Pi 3 (`main`):**
->   ```bash
->   cd ~/vlc-autoplay-studio && git fetch origin && git checkout main && git pull origin main
->   ```
->
-> * **Para la rama con el desarrollo web puro (`web-control`):**
->   ```bash
->   cd ~/vlc-autoplay-studio && git fetch origin && git checkout web-control && git pull origin web-control
->   ```
+> ### 1️⃣ Para las Raspberry Pi 5 con Doble Proyector Optoma (`DUAL-OPTOMA`):
+> ```bash
+> cd ~/vlc-autoplay-studio && git fetch origin && git checkout DUAL-OPTOMA && git pull origin DUAL-OPTOMA && ./run.sh
+> ```
+> *(Soporte 4K @ 60Hz / 30Hz, doble micro-HDMI clonado, auto-detección de resolución común y control web)*
 >
 > ---
-> **📱 CÓMO ACCEDER AL CONTROL WEB DESDE LA TABLET SAMSUNG:**
-> 1. Conectá la tablet a la misma red Wi-Fi de las Raspberry Pi.
-> 2. Abrí Chrome y navegá a: **`http://<IP_DE_CUALQUIER_PI>:8080`**
+>
+> ### 2️⃣ Para la Raspberry Pi con Placa Focusrite Scarlett (`Pi+Scarlett`):
+> ```bash
+> cd ~/vlc-autoplay-studio && git fetch origin && git checkout Pi+Scarlett && git pull origin Pi+Scarlett && ./run.sh
+> ```
+> *(Ruteo de 6 canales en el DSP de la Scarlett 8i6, ganancia independiente, salida Subwoofer y control web)*
+>
+> ---
+>
+> ### 3️⃣ Para las demás Raspberry Pi estándar / Pi 3 (`main`):
+> ```bash
+> cd ~/vlc-autoplay-studio && git fetch origin && git checkout main && git pull origin main && ./run.sh
+> ```
+> *(Configuración estándar mono-pantalla HDMI, audio estéreo y control web)*
+>
+> ---
+>
+> ### ⚡ Si vas a instalar de cero en una nueva Raspberry Pi (One-Liner):
+> * **Rama Optoma Dual:** `curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/DUAL-OPTOMA/quick-install.sh | bash`
+> * **Rama Scarlett:** `curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/Pi%2BScarlett/quick-install.sh | bash`
+> * **Rama Estándar:** `curl -sSL https://raw.githubusercontent.com/chuledp/pi5_KIOSK_ANDREANI/main/quick-install.sh | bash`
+>
+> ---
+>
+> ### 📱 CÓMO ACCEDER AL CONTROL WEB DESDE LA TABLET SAMSUNG:
+> 1. Conectá la tablet a la misma red Wi-Fi en la que están las Raspberry Pi.
+> 2. Abrí Chrome (o cualquier navegador) y entrá a:
+>    ```text
+>    http://<IP_DE_CUALQUIER_PI>:8080
+>    ```
+>    *(La IP de cada Pi aparece en grande en la barra superior de AutoPlay Studio: `🌐 IP: 192.168.1.XX`)*
 > 3. Ingresá el **PIN: `1234`** (configurable desde AutoPlay Studio).
-> 4. *(Opcional)* En Chrome tocá `⋮` $\rightarrow$ **"Agregar a la pantalla principal"** para usarla a pantalla completa como una app.
+> 4. *(Opcional)* En Chrome tocá `⋮` $\rightarrow$ **"Agregar a la pantalla principal"** para usarla en pantalla completa como una app.
 
 ---
 
