@@ -28,6 +28,16 @@ from core.scarlett_mixer import (
     launch_scarlett_gui,
 )
 from core.web_control.discovery import get_local_ip
+try:
+    from core.scarlett_mixer import (
+        detect_scarlett_card,
+        configure_scarlett_8i6_hardware,
+        apply_scarlett_mix_levels,
+        launch_scarlett_gui,
+    )
+    HAS_SCARLETT_GUI = True
+except ImportError:
+    HAS_SCARLETT_GUI = False
 
 # Paleta de colores Dark Theme Profesional
 THEME = {
@@ -146,6 +156,20 @@ class VLCAutoPlayApp(tk.Tk):
             fg=THEME["text"]
         )
         self.lbl_badge_text.pack(side=tk.LEFT)
+
+        # Badge destacado de IP Local para conectar la Tablet Samsung
+        local_ip = get_local_ip()
+        self.ip_badge_frame = tk.Frame(header_frame, bg=THEME["card"], padx=12, pady=6, bd=1, relief="solid")
+        self.ip_badge_frame.pack(side=tk.RIGHT, padx=(0, 10))
+
+        self.lbl_header_ip = tk.Label(
+            self.ip_badge_frame,
+            text=f"🌐 IP: {local_ip}",
+            font=("Helvetica", 10, "bold"),
+            bg=THEME["card"],
+            fg=THEME["primary"]
+        )
+        self.lbl_header_ip.pack(side=tk.LEFT)
 
     def _build_main_layout(self):
         container = tk.Frame(self, bg=THEME["bg"], padx=14, pady=10)
@@ -334,8 +358,21 @@ class VLCAutoPlayApp(tk.Tk):
         self.var_engine = tk.StringVar(value="mpv")
         self.var_hwdec_mode = tk.StringVar(value="drm-copy")
 
+        # Banner informativo destacado de IP Local y Acceso Tablet
+        net_info_box = tk.Frame(card_net, bg=THEME["surface"], padx=10, pady=6)
+        net_info_box.pack(fill=tk.X, pady=(4, 6))
+
+        self.lbl_net_ip_info = tk.Label(
+            net_info_box,
+            text=f"📍 IP de esta Pi: {local_ip}  |  📱 Panel Tablet: http://{local_ip}:8080 (PIN: 1234)",
+            bg=THEME["surface"],
+            fg=THEME["success"],
+            font=("Helvetica", 9, "bold")
+        )
+        self.lbl_net_ip_info.pack(side=tk.LEFT)
+
         roles_row = tk.Frame(card_net, bg=THEME["card"])
-        roles_row.pack(fill=tk.X, pady=(6, 4))
+        roles_row.pack(fill=tk.X, pady=(4, 4))
 
         rb1 = ttk.Radiobutton(
             roles_row,
@@ -903,7 +940,12 @@ class VLCAutoPlayApp(tk.Tk):
 
         local_ip = get_local_ip()
         web_port = prof.get("web_control_port", 8080)
+        pin_val = str(prof.get("web_control_pin", "1234"))
         self.lbl_web_url.config(text=f"http://{local_ip}:{web_port}")
+        if hasattr(self, "lbl_net_ip_info"):
+            self.lbl_net_ip_info.config(text=f"📍 IP de esta Pi: {local_ip}  |  📱 Panel Tablet: http://{local_ip}:{web_port} (PIN: {pin_val})")
+        if hasattr(self, "lbl_header_ip"):
+            self.lbl_header_ip.config(text=f"🌐 IP: {local_ip}")
 
         self.on_role_change()
 
