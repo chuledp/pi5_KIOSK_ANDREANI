@@ -41,7 +41,7 @@
 >    http://<IP_DE_CUALQUIER_PI>:8080
 >    ```
 >    *(La IP de cada Pi aparece en grande en la barra superior de AutoPlay Studio: `🌐 IP: 192.168.1.XX`)*
-> 3. Ingresá el **PIN: `1234`** (configurable desde AutoPlay Studio).
+> 3. **Acceso directo sin clave**: El panel se abre directamente para uso inmediato del personal.
 > 4. *(Opcional)* En Chrome tocá `⋮` $\rightarrow$ **"Agregar a la pantalla principal"** para usarla en pantalla completa como una app.
 
 ---

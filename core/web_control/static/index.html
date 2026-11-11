@@ -440,7 +440,7 @@
       inset: 0;
       background: var(--bg);
       z-index: 1000;
-      display: flex;
+      display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;
@@ -657,7 +657,7 @@
         <div class="pulse-dot"></div>
         <span id="header-devices-count">Buscando equipos...</span>
       </div>
-      <button class="btn-lock" onclick="lockScreen()">
+      <button class="btn-lock" id="btn-lock" style="display: none;" onclick="lockScreen()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
           <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -830,13 +830,18 @@
         const res = await fetch("/api/devices");
         if (!res.ok) return;
         const data = await res.json();
-        hasPinConfigured = data.has_pin;
+        hasPinConfigured = Boolean(data.has_pin);
 
-        // Comprobar pantalla de PIN
+        const pinScreen = document.getElementById("pin-screen");
+        const lockBtn = document.getElementById("btn-lock");
+
+        // Comprobar pantalla de PIN solo si hay clave configurada
         if (hasPinConfigured && !authToken) {
-          document.getElementById("pin-screen").style.display = "flex";
+          if (pinScreen) pinScreen.style.display = "flex";
+          if (lockBtn) lockBtn.style.display = "flex";
         } else {
-          document.getElementById("pin-screen").style.display = "none";
+          if (pinScreen) pinScreen.style.display = "none";
+          if (lockBtn) lockBtn.style.display = hasPinConfigured ? "flex" : "none";
         }
 
         if (data.devices) {
