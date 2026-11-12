@@ -48,7 +48,7 @@
 > * **⚡ Para Raspberry Pi 3 (Kiosk Headless Autónomo con Pendrive USB):**
 >   *(Repositorio dedicado ultra-optimizado: [pi3-video-kiosk](https://github.com/chuledp/pi3-video-kiosk))*
 >   ```bash
->   curl -sSL https://raw.githubusercontent.com/chuledp/pi3-video-kiosk/main/install.sh | bash
+>   curl -sSL https://raw.githubusercontent.com/chuledp/pi3-video-kiosk/main/install.sh | sudo bash
 >   ```
 >
 > ---
