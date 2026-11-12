@@ -45,6 +45,12 @@
 >   rm -rf ~/vlc-autoplay-studio && git clone -b main https://github.com/chuledp/pi5_KIOSK_ANDREANI.git ~/vlc-autoplay-studio && cd ~/vlc-autoplay-studio && ./run.sh
 >   ```
 >
+> * **⚡ Para Raspberry Pi 3 (Kiosk Headless Autónomo con Pendrive USB):**
+>   *(Repositorio dedicado ultra-optimizado: [pi3-video-kiosk](https://github.com/chuledp/pi3-video-kiosk))*
+>   ```bash
+>   curl -sSL https://raw.githubusercontent.com/chuledp/pi3-video-kiosk/main/install.sh | bash
+>   ```
+>
 > ---
 >
 > ### ⚡ Si vas a instalar de cero en una nueva Raspberry Pi (One-Liner):
