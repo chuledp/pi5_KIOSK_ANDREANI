@@ -125,6 +125,31 @@
       gap: 6px;
     }
 
+    .btn-scan {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+    .btn-scan:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .btn-scan:active {
+      transform: scale(0.96);
+    }
+    .btn-scan:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     /* CONTENEDOR PRINCIPAL */
     main {
       max-width: 1200px;
@@ -657,6 +682,13 @@
         <div class="pulse-dot"></div>
         <span id="header-devices-count">Buscando equipos...</span>
       </div>
+      <button class="btn-scan" id="btn-scan" onclick="triggerSubnetScan()" title="Escanear red en busca de todas las Raspberry">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>Escanear Red</span>
+      </button>
       <button class="btn-lock" id="btn-lock" style="display: none;" onclick="lockScreen()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -754,12 +786,19 @@
     let hasPinConfigured = false;
     let pendingModalAction = null;
     let knownDevices = [];
+    let fetchTimer = null;
+    let isFetching = false;
+    let isScanning = false;
 
     // INICIALIZACIÓN
     window.addEventListener("DOMContentLoaded", () => {
       fetchDevices();
-      setInterval(fetchDevices, 1200);
     });
+
+    function scheduleNextFetch(delay = 1500) {
+      if (fetchTimer) clearTimeout(fetchTimer);
+      fetchTimer = setTimeout(fetchDevices, delay);
+    }
 
     // TECLADO PIN
     function pressPin(digit) {
@@ -824,11 +863,54 @@
       document.getElementById("pin-screen").style.display = "flex";
     }
 
-    // COMUNICACIÓN CON SERVIDOR
-    async function fetchDevices() {
+    // ESCANEO ACTIVO DE RED
+    async function triggerSubnetScan() {
+      if (isScanning) return;
+      isScanning = true;
+      const btn = document.getElementById("btn-scan");
+      const originalHtml = btn ? btn.innerHTML : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>Escaneando...</span>`;
+      }
+      showToast("🔍 Buscando todas las Raspberry Pi en la red...");
+
       try {
-        const res = await fetch("/api/devices");
-        if (!res.ok) return;
+        const res = await fetch("/api/scan", {
+          headers: { "X-Kiosk-Token": authToken }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`✓ Red escaneada: ${data.found} equipos detectados`);
+          await fetchDevices();
+        } else {
+          showToast(data.error || "No se pudo completar el escaneo");
+        }
+      } catch (e) {
+        showToast("Error al escanear la red");
+      } finally {
+        isScanning = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        }
+      }
+    }
+
+    // COMUNICACIÓN CON SERVIDOR (POLLING SECUENCIAL NO BLOQUEANTE)
+    async function fetchDevices() {
+      if (isFetching) return;
+      isFetching = true;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+      try {
+        const res = await fetch("/api/devices", { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          scheduleNextFetch(3000);
+          return;
+        }
         const data = await res.json();
         hasPinConfigured = Boolean(data.has_pin);
 
@@ -849,8 +931,13 @@
           renderDevices(data.devices);
           updateHeaderCount(data.devices);
         }
+        scheduleNextFetch(1500);
       } catch (e) {
+        clearTimeout(timeoutId);
         document.getElementById("header-devices-count").innerText = "Reconectando...";
+        scheduleNextFetch(3000);
+      } finally {
+        isFetching = false;
       }
     }
 

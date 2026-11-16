@@ -25,6 +25,13 @@ class ReusableThreadingHTTPServer(_BaseHTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 
+    def process_request(self, request, client_address):
+        try:
+            request.settimeout(5.0)
+        except Exception:
+            pass
+        super().process_request(request, client_address)
+
 from core.web_control.discovery import DeviceRegistry, DeviceBeacon, get_local_ip
 from core.osc_receiver import build_osc_message
 
@@ -45,6 +52,8 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Kiosk-Token")
+        self.send_header("Connection", "close")
+        self.close_connection = True
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -114,6 +123,17 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/ping":
             self._send_json({"status": "ok", "time": time.time()})
+            return
+
+        elif path == "/api/scan":
+            # Disparar escaneo activo HTTP en la subred local
+            discovered = self.web_control.registry.scan_subnet_http(port=self.web_control.port)
+            devices = self.web_control.registry.get_devices()
+            self._send_json({
+                "success": True,
+                "found_count": len(discovered),
+                "devices": devices
+            })
             return
 
         elif path == "/api/devices":
@@ -239,11 +259,30 @@ class WebControlServer:
                 name="WebControlHttp"
             )
             self._server_thread.start()
+
+            # Iniciar escaneo activo periódico de subred para auto-descubrimiento en redes con UDP bloqueado
+            self._mesh_thread = threading.Thread(
+                target=self._mesh_sync_loop,
+                daemon=True,
+                name="KioskMeshSync"
+            )
+            self._mesh_thread.start()
+
             print(f"[WebControl] Servidor Web iniciado en http://0.0.0.0:{self.port}")
             return True
         except Exception as e:
             print(f"[WebControl] Error iniciando servidor HTTP en puerto {self.port}: {e}")
             return False
+
+    def _mesh_sync_loop(self):
+        """Escanea periódicamente la subred LAN para sincronizar todas las Pis por HTTP."""
+        time.sleep(2.0)
+        while self._server is not None:
+            try:
+                self.registry.scan_subnet_http(port=self.port)
+            except Exception:
+                pass
+            time.sleep(25.0)
 
     def stop(self) -> None:
         if self._server:

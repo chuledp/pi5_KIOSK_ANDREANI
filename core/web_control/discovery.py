@@ -33,9 +33,20 @@ def get_local_ip() -> str:
     return ip
 
 
+def get_broadcast_ips() -> List[str]:
+    """Retorna las direcciones de broadcast probables para la red local."""
+    broadcasts = ["255.255.255.255"]
+    local_ip = get_local_ip()
+    if local_ip and local_ip != "127.0.0.1" and "." in local_ip:
+        parts = local_ip.split(".")
+        if len(parts) == 4:
+            broadcasts.append(f"{parts[0]}.{parts[1]}.{parts[2]}.255")
+    return list(dict.fromkeys(broadcasts))
+
+
 class DeviceRegistry:
     """Registro en memoria protegido por hilo de todas las Raspberry Pi vistas en la red."""
-    def __init__(self, offline_timeout: float = 6.0):
+    def __init__(self, offline_timeout: float = 30.0):
         self._lock = threading.Lock()
         self._devices: Dict[str, Dict[str, Any]] = {}
         self.offline_timeout = offline_timeout
@@ -46,6 +57,53 @@ class DeviceRegistry:
         with self._lock:
             # Si ya existía, preservamos ciertos campos y actualizamos
             self._devices[device_id] = data
+
+    def scan_subnet_http(self, port: int = 8080, max_workers: int = 35) -> List[Dict[str, Any]]:
+        """
+        Escaneo activo HTTP en la subred local /24.
+        Permite descubrir las otras Pis incluso si el router WiFi bloquea UDP Broadcast (Client Isolation).
+        """
+        local_ip = get_local_ip()
+        if not local_ip or local_ip == "127.0.0.1" or "." not in local_ip:
+            return []
+
+        prefix = local_ip.rsplit(".", 1)[0]
+        discovered = []
+
+        import urllib.request
+        from concurrent.futures import ThreadPoolExecutor
+
+        def probe_ip(target_ip: str):
+            if target_ip == local_ip:
+                return None
+            try:
+                # 1. Probar ping rápido a la API
+                url = f"http://{target_ip}:{port}/api/ping"
+                req = urllib.request.Request(url, headers={"User-Agent": "KioskMesh/1.0"})
+                with urllib.request.urlopen(req, timeout=0.35) as resp:
+                    if resp.status == 200:
+                        # 2. Si responde, obtener la lista de dispositivos de esa Pi
+                        dev_url = f"http://{target_ip}:{port}/api/devices"
+                        dev_req = urllib.request.Request(dev_url, headers={"User-Agent": "KioskMesh/1.0"})
+                        with urllib.request.urlopen(dev_req, timeout=0.6) as dev_resp:
+                            data = json.loads(dev_resp.read().decode("utf-8"))
+                            return data.get("devices", [])
+            except Exception:
+                pass
+            return None
+
+        candidates = [f"{prefix}.{i}" for i in range(1, 255)]
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                for results in pool.map(probe_ip, candidates):
+                    if results:
+                        for d in results:
+                            self.register_or_update(d)
+                            discovered.append(d)
+        except Exception as e:
+            print(f"[DeviceRegistry] Error en escaneo HTTP: {e}")
+
+        return discovered
 
     def get_devices(self) -> List[Dict[str, Any]]:
         now = time.time()
@@ -162,7 +220,11 @@ class DeviceBeacon:
             # Registrar localmente en el registro propio
             self.registry.register_or_update(data)
             payload = json.dumps(data).encode("utf-8")
-            self._sock.sendto(payload, ("255.255.255.255", self.port))
+            for bcast_ip in get_broadcast_ips():
+                try:
+                    self._sock.sendto(payload, (bcast_ip, self.port))
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -172,7 +234,11 @@ class DeviceBeacon:
             return
         try:
             ping_msg = json.dumps({"action": "WHOIS"}).encode("utf-8")
-            self._sock.sendto(ping_msg, ("255.255.255.255", self.port))
+            for bcast_ip in get_broadcast_ips():
+                try:
+                    self._sock.sendto(ping_msg, (bcast_ip, self.port))
+                except Exception:
+                    pass
         except Exception:
             pass
 
