@@ -949,6 +949,7 @@ class VLCAutoPlayApp(tk.Tk):
         current_pin = str(prof.get("web_control_pin", "") or "")
         self.entry_web_pin.insert(0, current_pin)
 
+        self.local_ip = get_local_ip()
         local_ip = self.local_ip
         web_port = prof.get("web_control_port", 8080)
         pin_label = f"PIN: {current_pin}" if current_pin else "Acceso Libre / Sin PIN"
@@ -1040,6 +1041,7 @@ class VLCAutoPlayApp(tk.Tk):
         self.set_status("Configuración guardada.")
 
     def open_web_control_browser(self):
+        self.local_ip = get_local_ip()
         prof = self.profile_mgr.get_profile(self.current_profile_id) or {}
         port = prof.get("web_control_port", 8080)
         ip = self.local_ip
@@ -1219,6 +1221,7 @@ class VLCAutoPlayApp(tk.Tk):
                 pass
             self.web_server = None
 
+        self.local_ip = get_local_ip()
         prof = self.profile_mgr.get_profile(self.current_profile_id) if self.current_profile_id else self.profile_mgr.get_active_profile()
         if not prof:
             return

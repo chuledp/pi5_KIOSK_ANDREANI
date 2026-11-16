@@ -18,19 +18,41 @@ DEFAULT_DISCOVERY_PORT = 9002
 
 def get_local_ip() -> str:
     """Detecta la IP local de la Raspberry Pi en la red LAN activa."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        # No requiere conexión a internet real, solo resuelve interfaz de salida
-        s.connect(("10.255.255.255", 1))
-        ip = s.getsockname()[0]
-    except Exception:
+    # 1. En Linux / Raspberry Pi OS, intentar primero hostname -I para obtener la IP asignada por DHCP
+    if sys.platform.startswith("linux"):
         try:
-            ip = socket.gethostbyname(socket.gethostname())
+            out = subprocess.check_output(["hostname", "-I"], timeout=1).decode("utf-8").strip()
+            for cand in out.split():
+                if cand and not cand.startswith("127.") and ":" not in cand:
+                    return cand
         except Exception:
-            ip = "127.0.0.1"
-    finally:
-        s.close()
-    return ip
+            pass
+
+    # 2. Intentar socket UDP hacia gateways o destinos estándar
+    for target in [("1.1.1.1", 80), ("8.8.8.8", 80), ("10.254.254.254", 1), ("192.168.1.254", 1)]:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(target)
+            ip = s.getsockname()[0]
+            if ip and not ip.startswith("127."):
+                return ip
+        except Exception:
+            pass
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+
+    # 3. Fallback a gethostbyname
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+
+    return "127.0.0.1"
 
 
 def get_broadcast_ips() -> List[str]:

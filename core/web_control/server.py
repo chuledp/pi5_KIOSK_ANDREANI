@@ -349,11 +349,25 @@ class WebControlServer:
         # 3. Despacho según objetivo
         executed_count = 0
 
-        # CASO A: Todas las Raspberry Pi (Broadcast UDP instantáneo < 2ms)
+        # CASO A: Todas las Raspberry Pi (Broadcast UDP instantáneo + Unicast directo)
         if target == "all":
-            # Enviar por broadcast UDP a todas las máquinas en puerto 9000
-            self.send_osc_packet("255.255.255.255", 9000, osc_addr, osc_args)
-            # Ejecutar localmente también
+            # 1. Enviar por broadcast UDP general y dirigido a la subred en puerto 9000
+            from core.web_control.discovery import get_broadcast_ips
+            for bcast_ip in get_broadcast_ips():
+                try:
+                    self.send_osc_packet(bcast_ip, 9000, osc_addr, osc_args)
+                except Exception:
+                    pass
+
+            # 2. Enviar por unicast directo a cada Raspberry Pi registrada (por si el router bloquea broadcast)
+            for dev in self.registry.get_devices():
+                if dev.get("ip") and dev.get("id") != self.local_device_id:
+                    try:
+                        self.send_osc_packet(dev["ip"], int(dev.get("osc_port", 9000)), osc_addr, osc_args)
+                    except Exception:
+                        pass
+
+            # 3. Ejecutar localmente también
             if self.local_command_handler:
                 try:
                     self.local_command_handler(action, value)
@@ -361,7 +375,7 @@ class WebControlServer:
                     pass
             # Pedir a los beacons que refresquen estado
             self.beacon.trigger_announcement()
-            return {"success": True, "message": f"Comando '{action}' enviado a todo el edificio por broadcast."}
+            return {"success": True, "message": f"Comando '{action}' enviado a todo el edificio."}
 
         # CASO B: Un Piso Específico (Planta Baja, 1er Piso, etc.)
         elif target == "floor":
