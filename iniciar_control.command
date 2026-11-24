@@ -17,3 +17,4 @@ echo "Directorio: $DIR"
 
 # Ejecutar el servidor Python
 python3 manager_server.py 5050
+

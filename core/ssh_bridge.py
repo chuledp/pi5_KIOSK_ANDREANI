@@ -22,9 +22,9 @@ class SSHBridge:
             return env, None
 
         askpass_script = tempfile.NamedTemporaryFile("w", delete=False, suffix=".sh")
-        # Script que devuelve la contraseña por stdout
-        safe_pass = password.replace('\\', '\\\\').replace('"', '\\"')
-        askpass_script.write(f'#!/bin/sh\nprintf "%s" "{safe_pass}"\n')
+        # Script que devuelve la contraseña por stdout sin expansión de variables ($)
+        safe_pass = password.replace("'", "'\\''")
+        askpass_script.write(f"#!/bin/sh\nprintf '%s' '{safe_pass}'\n")
         askpass_script.close()
         os.chmod(askpass_script.name, 0o755)
 
@@ -333,3 +333,4 @@ else:
         cmd = "sudo poweroff"
         self.run_command(ip, cmd, timeout=5)
         return True, "Orden de apagado enviada"
+

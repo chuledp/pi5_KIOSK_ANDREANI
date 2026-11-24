@@ -79,15 +79,18 @@ class HTTPBridge:
     ) -> Dict[str, Any]:
         """Envía una acción a todas las Pis registradas en paralelo."""
         results = {}
+        lock = threading.Lock()
 
         def _send(d: Dict[str, Any]):
             ip = d.get("ip")
             if not ip or not d.get("online", True):
                 return
             res = self.send_command(ip=ip, action=action, target="all", value=value)
-            results[ip] = res.get("success", False)
+            with lock:
+                results[ip] = res.get("success", False)
 
         with ThreadPoolExecutor(max_workers=10) as pool:
             list(pool.map(_send, devices))
 
         return {"success": True, "results": results}
+

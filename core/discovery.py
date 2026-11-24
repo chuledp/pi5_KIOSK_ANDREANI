@@ -95,6 +95,7 @@ class FleetDiscovery:
                     candidates.append(f"{sub}.{i}")
 
             discovered = []
+            disc_lock = threading.Lock()
 
             def _worker(ip: str):
                 dev = self.probe_device(ip)
@@ -102,7 +103,8 @@ class FleetDiscovery:
                     dev["last_seen"] = time.time()
                     dev["online"] = True
                     self.register_device(dev)
-                    discovered.append(dev)
+                    with disc_lock:
+                        discovered.append(dev)
 
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 list(pool.map(_worker, candidates))
@@ -148,3 +150,4 @@ class FleetDiscovery:
         with self._lock:
             if dev_id in self._devices:
                 del self._devices[dev_id]
+

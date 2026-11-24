@@ -40,12 +40,14 @@ class FleetManagerApp:
         self.http = HTTPBridge(default_port=self.creds.get_config().get("web_control_port", 8080))
         self.hw_stats_cache: Dict[str, Dict[str, Any]] = {}
         self._running = False
+        self._stop_event = threading.Event()
         self._server = None
 
     def start_background_monitors(self):
         """Inicia escaneo inicial y bucle de refresco continuo de estados."""
         def _initial_scan():
-            time.sleep(1.0)
+            if self._stop_event.wait(1.0):
+                return
             print("[FleetManager] Iniciando escaneo de red local...")
             self.discovery.scan_network()
             print(f"[FleetManager] Escaneo inicial completo. Equipos detectados: {len(self.discovery.get_all_devices())}")
@@ -54,16 +56,30 @@ class FleetManagerApp:
             while self._running:
                 devices = self.discovery.get_all_devices()
                 for dev in devices:
+                    if not self._running:
+                        break
                     ip = dev.get("ip")
                     if ip:
                         status = self.http.fetch_status(ip)
                         if status:
                             status["ip"] = ip
                             self.discovery.register_device(status)
-                time.sleep(3.0)
+                if self._stop_event.wait(3.0):
+                    break
 
         threading.Thread(target=_initial_scan, daemon=True, name="FleetScan").start()
         threading.Thread(target=_refresh_loop, daemon=True, name="FleetRefresh").start()
+
+    def stop(self):
+        """Detiene de forma limpia todos los monitores y el servidor HTTP."""
+        self._running = False
+        self._stop_event.set()
+        if self._server:
+            try:
+                self._server.shutdown()
+                self._server.server_close()
+            except Exception:
+                pass
 
 
 class FleetRequestHandler(BaseHTTPRequestHandler):
@@ -374,9 +390,7 @@ def run_fleet_manager(port: int = 5050):
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n[FleetManager] Deteniendo servidor...")
-        app._running = False
-        if app._server:
-            app._server.server_close()
+        app.stop()
     except Exception as e:
         print(f"[FleetManager] Error iniciando servidor en puerto {port}: {e}")
 

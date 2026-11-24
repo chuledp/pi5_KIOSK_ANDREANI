@@ -16,3 +16,4 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
 fi
 
 python3 manager_server.py "$PORT"
+

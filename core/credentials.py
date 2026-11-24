@@ -94,3 +94,4 @@ class CredentialsManager:
         # Copia para devolver a la UI ocultando passwords completos si se requiere
         cfg = dict(self._config)
         return cfg
+

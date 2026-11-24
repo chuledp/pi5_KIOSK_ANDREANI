@@ -64,3 +64,4 @@ kiosk-fleet-manager/
 └── static/
     └── index.html            # Interfaz gráfica interactiva (Torre de Control)
 ```
+
