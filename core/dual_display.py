@@ -257,5 +257,25 @@ fi
 if command -v xrandr >/dev/null 2>&1; then
     xrandr --output HDMI-1 --mode {res_target} --pos 0x0 --output HDMI-2 --mode {res_target} --pos {pos_x11} {same_as_flag} 2>/dev/null || xrandr --output HDMI-1 --auto --pos 0x0 --output HDMI-2 --auto --pos {pos_x11} {same_as_flag} 2>/dev/null || true
     xrandr --output HDMI-A-1 --mode {res_target} --pos 0x0 --output HDMI-A-2 --mode {res_target} --pos {pos_x11} {same_as_flag_a} 2>/dev/null || xrandr --output HDMI-A-1 --auto --pos 0x0 --output HDMI-A-2 --auto --pos {pos_x11} {same_as_flag_a} 2>/dev/null || true
-fi"""
+fi
+
+# Watchdog HDMI: Re-aplica resolución si un proyector se enciende con retraso tras la Pi
+(
+    while true; do
+        sleep 4
+        if command -v wlr-randr >/dev/null 2>&1; then
+            for sf in /sys/class/drm/card*-HDMI-A-*/status; do
+                if [ -f "$sf" ] && [ "$(cat "$sf" 2>/dev/null)" = "connected" ]; then
+                    mode_f="$(dirname "$sf")/mode"
+                    if [ ! -s "$mode_f" ]; then
+                        wlr-randr --output HDMI-A-1 --on --pos 0,0 {mode_wlr} 2>/dev/null || true
+                        wlr-randr --output HDMI-A-2 --on --pos {pos_wlr} {mode_wlr} 2>/dev/null || true
+                    fi
+                fi
+            done
+        fi
+    done
+) &
+_HDMI_WATCHDOG_PID=$!
+trap "kill $_HDMI_WATCHDOG_PID 2>/dev/null || true" EXIT INT TERM"""
 

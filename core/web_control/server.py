@@ -140,11 +140,21 @@ class WebControlRequestHandler(BaseHTTPRequestHandler):
             # Si el beacon está activo, enviar un ping rápido si la lista está vacía
             pin = (self.web_control.pin if self.web_control else "").strip()
             devices = self.web_control.registry.get_devices()
+            hardening = {}
+            try:
+                from core.kiosk_guardian import get_system_hardening_status
+                hardening = get_system_hardening_status()
+            except Exception:
+                pass
+            for d in devices:
+                if d.get("id") == self.web_control.local_device_id:
+                    d["hardening"] = hardening
             self._send_json({
                 "success": True,
                 "server_time": time.time(),
                 "local_id": self.web_control.local_device_id,
                 "has_pin": bool(pin),
+                "hardening": hardening,
                 "devices": devices
             })
             return
@@ -422,7 +432,31 @@ class WebControlServer:
         return {"success": False, "error": f"Objetivo '{target}' desconocido."}
 
     def _dispatch_system_action(self, action: str, target: str, floor: str, device_id: str) -> Dict[str, Any]:
-        """Ejecuta apagado seguro o reinicio del sistema operativo."""
+        """Ejecuta apagado seguro, reinicio, o acciones de blindaje del sistema operativo."""
+        if action in ("enable_phase_cut", "enable_phase_cut_protection", "protect_sd"):
+            try:
+                from core.kiosk_guardian import enable_phase_cut_protection
+                ok, msg = enable_phase_cut_protection()
+                return {"success": ok, "message": msg}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        if action in ("disable_phase_cut", "disable_phase_cut_protection", "unprotect_sd"):
+            try:
+                from core.kiosk_guardian import disable_phase_cut_protection
+                ok, msg = disable_phase_cut_protection()
+                return {"success": ok, "message": msg}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        if action in ("fix_handshake", "apply_projector_handshake", "projector_handshake"):
+            try:
+                from core.kiosk_guardian import apply_projector_handshake_fix
+                ok, msg = apply_projector_handshake_fix()
+                return {"success": ok, "message": msg}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
         cmd_linux = ["sudo", "systemctl", "poweroff"] if action == "shutdown" else ["sudo", "systemctl", "reboot"]
 
         def _execute_local_system_cmd():

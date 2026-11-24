@@ -23,6 +23,12 @@ from core.sync_runner import SyncDaemon
 from core.osc_receiver import OSCReceiver
 from core.web_control.discovery import get_local_ip
 from core.web_control import start_web_control, WebControlServer
+from core.kiosk_guardian import (
+    get_system_hardening_status,
+    enable_phase_cut_protection,
+    disable_phase_cut_protection,
+    apply_projector_handshake_fix,
+)
 try:
     from core.scarlett_mixer import (
         detect_scarlett_card,
@@ -95,6 +101,7 @@ class VLCAutoPlayApp(tk.Tk):
                 enable_dual_hdmi_mirror(active_prof)
 
         self.update_autostart_badge()
+        self.update_guardian_status()
         self._start_live_osc_listener()
         self._start_or_restart_web_control()
 
@@ -660,11 +667,101 @@ class VLCAutoPlayApp(tk.Tk):
         self.lbl_ssub.pack(anchor="w")
         ttk.Scale(f_ssub, from_=0, to=200, orient="horizontal", variable=self.var_scarlett_sub, command=self._on_scarlett_slide).pack(fill=tk.X)
 
+        # Tarjeta 4: Blindaje Kiosk (Protección de Fase & Handshake Proyectores)
+        card_guardian = tk.Frame(right_col, bg=THEME["card"], padx=14, pady=8, bd=1, relief="ridge")
+        card_guardian.pack(fill=tk.X, pady=(0, 8))
+
+        top_guard = tk.Frame(card_guardian, bg=THEME["card"])
+        top_guard.pack(fill=tk.X)
+        ttk.Label(top_guard, text="4. Blindaje Kiosk: Protección de Fase & Proyectores", style="CardTitle.TLabel").pack(side=tk.LEFT)
+
+        btn_refresh_guard = tk.Button(
+            top_guard,
+            text="🔄 Actualizar",
+            command=self.update_guardian_status,
+            bg=THEME["card_border"],
+            fg=THEME["text"],
+            relief="flat",
+            font=("Helvetica", 8),
+            cursor="hand2",
+            padx=6,
+            pady=1
+        )
+        btn_refresh_guard.pack(side=tk.RIGHT)
+
+        # Fila de Estado Visual
+        status_guard_row = tk.Frame(card_guardian, bg=THEME["surface"], padx=8, pady=4)
+        status_guard_row.pack(fill=tk.X, pady=(4, 6))
+
+        self.lbl_guardian_sd_status = tk.Label(
+            status_guard_row,
+            text="Tarjeta SD: Verificando...",
+            bg=THEME["surface"],
+            fg=THEME["amber"],
+            font=("Helvetica", 8, "bold")
+        )
+        self.lbl_guardian_sd_status.pack(side=tk.LEFT, padx=(0, 14))
+
+        self.lbl_guardian_hdmi_status = tk.Label(
+            status_guard_row,
+            text="Proyectores: Verificando...",
+            bg=THEME["surface"],
+            fg=THEME["teal"],
+            font=("Helvetica", 8, "bold")
+        )
+        self.lbl_guardian_hdmi_status.pack(side=tk.LEFT)
+
+        # Fila de Botones de Blindaje
+        btns_guard_row = tk.Frame(card_guardian, bg=THEME["card"])
+        btns_guard_row.pack(fill=tk.X)
+
+        self.btn_enable_protect = tk.Button(
+            btns_guard_row,
+            text="🛡️ Proteger SD (Modo Solo Lectura para Fase)",
+            command=self.action_enable_phase_cut_protection,
+            bg=THEME["teal"],
+            fg="#ffffff",
+            relief="flat",
+            font=("Helvetica", 8, "bold"),
+            cursor="hand2",
+            padx=8,
+            pady=3
+        )
+        self.btn_enable_protect.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.btn_disable_protect = tk.Button(
+            btns_guard_row,
+            text="🔓 Modo Mantenimiento (Permitir Escritura)",
+            command=self.action_disable_phase_cut_protection,
+            bg=THEME["card_border"],
+            fg=THEME["text"],
+            relief="flat",
+            font=("Helvetica", 8),
+            cursor="hand2",
+            padx=8,
+            pady=3
+        )
+        self.btn_disable_protect.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.btn_fix_handshake = tk.Button(
+            btns_guard_row,
+            text="📽️ Blindar Handshake Proyectores",
+            command=self.action_apply_projector_handshake,
+            bg=THEME["purple"],
+            fg="#ffffff",
+            relief="flat",
+            font=("Helvetica", 8, "bold"),
+            cursor="hand2",
+            padx=8,
+            pady=3
+        )
+        self.btn_fix_handshake.pack(side=tk.LEFT)
+
         # Tarjeta 5: Botones de Acción
         card_actions = tk.Frame(right_col, bg=THEME["surface"], padx=14, pady=10, bd=1, relief="ridge")
         card_actions.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(card_actions, text="4. Control de Arranque & Prueba en Vivo", style="CardTitle.TLabel").pack(anchor="w")
+        ttk.Label(card_actions, text="5. Control de Arranque & Prueba en Vivo", style="CardTitle.TLabel").pack(anchor="w")
 
         action_btns = tk.Frame(card_actions, bg=THEME["surface"])
         action_btns.pack(fill=tk.X, pady=(8, 0))
@@ -1434,6 +1531,79 @@ class VLCAutoPlayApp(tk.Tk):
             messagebox.showerror("Error", f"No se pudo iniciar la prueba: {e}")
             self.active_daemon = None
             self._restart_live_osc_listener()
+
+    def update_guardian_status(self):
+        """Actualiza las etiquetas visuales de blindaje de la tarjeta SD y de los proyectores."""
+        try:
+            st = get_system_hardening_status()
+            sd_txt = st.get("sd_status_text", "SD: Desconocido")
+            sd_col = THEME.get(st.get("sd_color", "text"), THEME["text"])
+            self.lbl_guardian_sd_status.config(text=f"Tarjeta SD: {sd_txt}", fg=sd_col)
+
+            hdmi_txt = st.get("hdmi_status_text", "Proyectores: Estándar")
+            hdmi_col = THEME["success"] if st.get("projectors_hardened") else THEME["amber"]
+            self.lbl_guardian_hdmi_status.config(text=f"Proyectores: {hdmi_txt}", fg=hdmi_col)
+        except Exception as e:
+            if hasattr(self, "lbl_guardian_sd_status"):
+                self.lbl_guardian_sd_status.config(text=f"Error consultando blindaje: {e}", fg=THEME["danger"])
+
+    def action_enable_phase_cut_protection(self):
+        confirm = messagebox.askyesno(
+            "Activar Protección contra Cortes de Fase",
+            "¿Deseás activar la protección total para apagado directo desde la llave térmica?\n\n"
+            "• La tarjeta SD se montará en modo Solo Lectura (OverlayFS en RAM).\n"
+            "• Se desactivará la memoria Swap para evitar desgaste y corrupción de sectores.\n"
+            "• Los logs del sistema se mantendrán en memoria volátil.\n"
+            "• Se activará auto-reparación no interactiva en el arranque del kernel.\n\n"
+            "Ningún corte de energía intempestivo podrá corromper el sistema operativo ni los videos.\n\n"
+            "¿Proceder?",
+            icon="warning"
+        )
+        if not confirm:
+            return
+        ok, msg = enable_phase_cut_protection()
+        if ok:
+            messagebox.showinfo("Blindaje de Fase Aplicado", msg)
+        else:
+            messagebox.showerror("Error", msg)
+        self.update_guardian_status()
+
+    def action_disable_phase_cut_protection(self):
+        confirm = messagebox.askyesno(
+            "Desactivar Protección (Modo Mantenimiento)",
+            "¿Deseás entrar en Modo Mantenimiento (Lectura/Escritura)?\n\n"
+            "• Te permitirá guardar nuevos videos, editar perfiles y actualizar el sistema.\n"
+            "• Se requiere reiniciar la Raspberry Pi para que la SD vuelva a ser escribible.\n\n"
+            "¿Proceder?",
+            icon="question"
+        )
+        if not confirm:
+            return
+        ok, msg = disable_phase_cut_protection()
+        if ok:
+            messagebox.showinfo("Modo Mantenimiento", msg)
+        else:
+            messagebox.showerror("Error", msg)
+        self.update_guardian_status()
+
+    def action_apply_projector_handshake(self):
+        confirm = messagebox.askyesno(
+            "Blindar Handshake de Proyectores",
+            "¿Deseás configurar el kernel y firmware para forzar la sincronización con proyectores?\n\n"
+            "• Forzará la señal digital HDMI activa permanentemente en el driver DRM (video=HDMI-A-1:...D).\n"
+            "• Forzará reloj HDMI continuo y amplificará la señal para cables largos (config_hdmi_boost=7).\n"
+            "• Soluciona el problema de tener que encender el proyector antes que la Raspberry Pi.\n\n"
+            "¿Aplicar configuración ahora?",
+            icon="question"
+        )
+        if not confirm:
+            return
+        ok, msg = apply_projector_handshake_fix()
+        if ok:
+            messagebox.showinfo("Handshake Blindado", msg)
+        else:
+            messagebox.showerror("Error", msg)
+        self.update_guardian_status()
 
     def set_status(self, text: str):
         self.lbl_status.config(text=text)

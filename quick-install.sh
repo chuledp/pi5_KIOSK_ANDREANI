@@ -55,4 +55,8 @@ fi
 chmod +x install.sh app.py run.sh 2>/dev/null || true
 ./install.sh || true
 
+# 5. Configurar Handshake HDMI blindado para proyectores (evitar pantalla negra si el proyector se enciende después)
+echo "Configurando handshake HDMI y Hotplug para proyectores..."
+python3 -c "from core.kiosk_guardian import apply_projector_handshake_fix; ok, msg = apply_projector_handshake_fix(); print(msg)" 2>/dev/null || true
+
 echo "=== ¡Listo! Ya podés usar AutoPlay Studio (Edición Pi+Scarlett) desde tu Escritorio ==="

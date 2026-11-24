@@ -40,6 +40,7 @@ class SyncDaemon:
         self.osc_recv: Optional[OSCReceiver] = None
         self.osc_broad: Optional[OSCBroadcaster] = None
         self.web_server: Optional[WebControlServer] = None
+        self.hdmi_watchdog = None
         self.is_running = False
 
     def start(self, profile_id: Optional[str] = None):
@@ -67,6 +68,14 @@ class SyncDaemon:
 
         # Asegurar que ambas salidas HDMI (HDMI-A-1 y HDMI-A-2) estén encendidas y espejadas
         enable_dual_hdmi_mirror(prof)
+
+        # Iniciar watchdog de handshake HDMI para proyectores que se enciendan con demora
+        try:
+            from core.kiosk_guardian import HDMIWatchdog
+            self.hdmi_watchdog = HDMIWatchdog(check_interval=3.0)
+            self.hdmi_watchdog.start()
+        except Exception:
+            pass
 
         print(f"Iniciando SyncDaemon con perfil '{prof['name']}' (Rol: {role.upper()}, Motor: {engine.upper()}, Puerto: {port})")
 
@@ -225,6 +234,12 @@ class SyncDaemon:
                 except Exception:
                     pass
             self.vlc_process = None
+        if self.hdmi_watchdog:
+            try:
+                self.hdmi_watchdog.stop()
+            except Exception:
+                pass
+            self.hdmi_watchdog = None
         self.mpv.terminate()
 
 def run_daemon_cli():
