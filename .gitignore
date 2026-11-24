@@ -5,3 +5,4 @@ __pycache__/
 .idea/
 .vscode/
 pi3-video-kiosk/
+kiosk-fleet-manager/

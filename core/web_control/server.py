@@ -210,6 +210,8 @@ class WebControlServer:
 
         self._server: Optional[ThreadingHTTPServer] = None
         self._server_thread: Optional[threading.Thread] = None
+        self._mesh_thread: Optional[threading.Thread] = None
+        self._mesh_stop = threading.Event()
         self._valid_tokens: set[str] = set()
         self._token_lock = threading.Lock()
 
@@ -276,15 +278,18 @@ class WebControlServer:
 
     def _mesh_sync_loop(self):
         """Escanea periódicamente la subred LAN para sincronizar todas las Pis por HTTP."""
-        time.sleep(2.0)
-        while self._server is not None:
+        if self._mesh_stop.wait(2.0):
+            return
+        while self._server is not None and not self._mesh_stop.is_set():
             try:
                 self.registry.scan_subnet_http(port=self.port)
             except Exception:
                 pass
-            time.sleep(25.0)
+            if self._mesh_stop.wait(25.0):
+                break
 
     def stop(self) -> None:
+        self._mesh_stop.set()
         if self._server:
             try:
                 self._server.shutdown()

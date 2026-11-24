@@ -129,6 +129,7 @@ class AutostartManager:
             engine = profile.get("player_engine", "mpv")
             role = profile.get("network_role", "follower")
             profile_id = profile.get("id", "")
+            clean_profile_id = str(profile_id).replace("'", "").replace('"', '').strip()
             web_enabled = profile.get("web_control_enabled", True)
 
             vlc_cmd = build_vlc_command(profile, binary="cvlc")
@@ -165,12 +166,12 @@ fi
 
 # Auto-configurar el Mixer Interno de la Focusrite Scarlett 8i6 (6 Salidas: 1-4 + S/PDIF 5-6)
 cd "{self.project_dir}"
-python3 -c "from core.profile_manager import ProfileManager; from core.scarlett_mixer import configure_scarlett_8i6_hardware; pm = ProfileManager(); p = pm.get_profile('{profile_id}') or pm.get_active_profile() or {{}}; configure_scarlett_8i6_hardware(p) if p.get('scarlett_enabled', True) else None" 2>/dev/null || true
+python3 -c "from core.profile_manager import ProfileManager; from core.scarlett_mixer import configure_scarlett_8i6_hardware; pm = ProfileManager(); p = pm.get_profile('{clean_profile_id}') or pm.get_active_profile() or {{}}; configure_scarlett_8i6_hardware(p) if p.get('scarlett_enabled', True) else None" 2>/dev/null || true
 
 # Iniciar reproducción según el motor y rol configurado
 if [ "{engine}" = "mpv" ] || [ "{role}" != "standalone" ] || [ "{web_enabled}" = "True" ]; then
     cd "{self.project_dir}"
-    exec python3 -m core.sync_runner "{profile_id}"
+    exec python3 -m core.sync_runner "{clean_profile_id}"
 else
     exec {vlc_cmd}
 fi

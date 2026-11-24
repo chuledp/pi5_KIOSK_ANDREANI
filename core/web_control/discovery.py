@@ -11,6 +11,7 @@ import time
 import socket
 import select
 import threading
+import subprocess
 from typing import Dict, Any, List, Optional, Callable
 
 DEFAULT_DISCOVERY_PORT = 9002

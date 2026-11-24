@@ -57,19 +57,16 @@ class SyncDaemon:
         # Asegurar el volumen maestro de la Raspberry Pi al 100% y rutear la Scarlett 8i6 antes de reproducir
         if not prof.get("no_audio", False):
             ensure_system_volume_max()
-            if prof.get("scarlett_enabled", True):
-                configure_scarlett_8i6_hardware(prof)
-
-        # Asegurar que ambas salidas HDMI (HDMI-A-1 y HDMI-A-2) estén encendidas y espejadas
-        enable_dual_hdmi_mirror(prof)
 
         # Configurar DSP de la Scarlett 8i6 si está presente y activa
         if prof.get("scarlett_enabled", True):
             try:
-                from core.scarlett_mixer import configure_scarlett_8i6_hardware
                 configure_scarlett_8i6_hardware(prof)
             except Exception:
                 pass
+
+        # Asegurar que ambas salidas HDMI (HDMI-A-1 y HDMI-A-2) estén encendidas y espejadas
+        enable_dual_hdmi_mirror(prof)
 
         print(f"Iniciando SyncDaemon con perfil '{prof['name']}' (Rol: {role.upper()}, Motor: {engine.upper()}, Puerto: {port})")
 
@@ -254,6 +251,8 @@ def run_daemon_cli():
                 break
             time.sleep(1)
     except KeyboardInterrupt:
+        pass
+    finally:
         daemon.stop()
 
 if __name__ == "__main__":

@@ -125,6 +125,11 @@ class TestWebControl(unittest.TestCase):
                     self.assertTrue(dev_data["has_pin"])
                     self.assertEqual(len(dev_data["devices"]), 1)
             except (urllib.error.HTTPError, OSError) as e:
+                if isinstance(e, urllib.error.HTTPError) and e.fp:
+                    try:
+                        e.close()
+                    except Exception:
+                        pass
                 if "Direct IP access" in str(e) or "Operation not permitted" in str(e) or "Bad Request" in str(e):
                     # Entorno sandbox macOS que bloquea proxy de loopback HTTP directo
                     pass

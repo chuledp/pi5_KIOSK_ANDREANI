@@ -13,6 +13,9 @@ import shutil
 import subprocess
 from typing import Dict, Any, Tuple, List, Optional
 
+RE_OUTPUT_HDMI1 = re.compile(r"\n?\[output:HDMI-A-1\][^\[]*", flags=re.DOTALL)
+RE_OUTPUT_HDMI2 = re.compile(r"\n?\[output:HDMI-A-2\][^\[]*", flags=re.DOTALL)
+
 
 def _read_sysfs(path: str) -> str:
     try:
@@ -96,8 +99,8 @@ def _update_wayfire_ini_mirror(resolution: str = "auto", mirror: bool = True) ->
             content = f.read()
 
         # Eliminar bloques previos de [output:HDMI-A-1] y [output:HDMI-A-2] para escribirlos limpios
-        content = re.sub(r"\n?\[output:HDMI-A-1\][^\[]*", "", content, flags=re.DOTALL)
-        content = re.sub(r"\n?\[output:HDMI-A-2\][^\[]*", "", content, flags=re.DOTALL)
+        content = RE_OUTPUT_HDMI1.sub("", content)
+        content = RE_OUTPUT_HDMI2.sub("", content)
         content = content.rstrip() + "\n\n"
 
         mode_line = f"mode = {resolution}@60000\n" if resolution != "auto" else ""

@@ -22,7 +22,13 @@ import re
 import sys
 import shutil
 import subprocess
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Set
+
+CARD_LINE_REGEX = re.compile(r"^(\d+)\s+\[([^\]]+)\]\s*:\s*(.+)$")
+CARD_HEADER_REGEX = re.compile(r"^\d+\s+\[")
+SCONTROL_REGEX = re.compile(r"'([^']+)'")
+CSET_REGEX = re.compile(r"name='([^']+)'")
+WPCTL_NODE_REGEX = re.compile(r"(\d+)\.")
 
 
 def detect_scarlett_card() -> Dict[str, Any]:
@@ -51,12 +57,12 @@ def detect_scarlett_card() -> Dict[str, Any]:
         i = 0
         while i < len(lines):
             line = lines[i].strip()
-            m = re.match(r"^(\d+)\s+\[([^\]]+)\]\s*:\s*(.+)$", line)
+            m = CARD_LINE_REGEX.match(line)
             if m:
                 idx = int(m.group(1))
                 card_id = m.group(2).strip()
                 desc = m.group(3).strip()
-                if i + 1 < len(lines) and not re.match(r"^\d+\s+\[", lines[i + 1].strip()):
+                if i + 1 < len(lines) and not CARD_HEADER_REGEX.match(lines[i + 1].strip()):
                     desc += " - " + lines[i + 1].strip()
                     i += 1
 
@@ -110,7 +116,7 @@ def _get_scontrols(card_idx: int) -> List[str]:
         return []
     controls = []
     for line in out.splitlines():
-        m = re.search(r"'([^']+)'", line)
+        m = SCONTROL_REGEX.search(line)
         if m:
             controls.append(m.group(1))
     return controls
@@ -123,7 +129,7 @@ def _get_cset_controls(card_idx: int) -> List[str]:
         return []
     controls = []
     for line in out.splitlines():
-        m = re.search(r"name='([^']+)'", line)
+        m = CSET_REGEX.search(line)
         if m:
             controls.append(m.group(1))
     return controls
@@ -160,12 +166,14 @@ def apply_scarlett_mix_levels(profile: Dict[str, Any]) -> bool:
     card_idx = info["card_index"]
     scontrols = _get_scontrols(card_idx)
     ccontrols = _get_cset_controls(card_idx)
-    all_names = set(scontrols) | set(ccontrols)
+    scontrols_set = set(scontrols)
+    ccontrols_set = set(ccontrols)
+    all_names = scontrols_set | ccontrols_set
 
     def set_ctrl(name: str, value: str) -> bool:
-        if name in scontrols:
+        if name in scontrols_set:
             return _run_amixer(card_idx, ["sset", name, value]) is not None
-        if name in ccontrols:
+        if name in ccontrols_set:
             return _run_amixer(card_idx, ["cset", f"name='{name}'", value]) is not None
         return False
 
@@ -243,15 +251,17 @@ def configure_scarlett_8i6_hardware(
     card_idx = info["card_index"]
     scontrols = _get_scontrols(card_idx)
     ccontrols = _get_cset_controls(card_idx)
-    all_names = set(scontrols) | set(ccontrols)
+    scontrols_set = set(scontrols)
+    ccontrols_set = set(ccontrols)
+    all_names = scontrols_set | ccontrols_set
     if not all_names:
         return False, f"Se detectó {info['description']} (Card {card_idx}), pero no expone controles amixer."
 
     def set_ctrl(name: str, value: str) -> bool:
-        if name in scontrols:
+        if name in scontrols_set:
             if _run_amixer(card_idx, ["sset", name, value]) is not None:
                 return True
-        if name in ccontrols:
+        if name in ccontrols_set:
             if _run_amixer(card_idx, ["cset", f"name='{name}'", value]) is not None:
                 return True
         return False
@@ -489,7 +499,7 @@ def set_default_scarlett_sink() -> bool:
                 if in_sinks:
                     low = line.lower()
                     if "scarlett" in low or "focusrite" in low:
-                        m = re.search(r"(\d+)\.", line)
+                        m = WPCTL_NODE_REGEX.search(line)
                         if m:
                             node_id = m.group(1)
                             subprocess.run(["wpctl", "set-default", node_id], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2.0)

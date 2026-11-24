@@ -71,46 +71,16 @@ class ProfileManager:
                     self.data["active_profile_id"] = loaded.get("active_profile_id")
                     self.data["autostart_enabled"] = bool(loaded.get("autostart_enabled", False))
                     profiles = loaded.get("profiles", [])
-                    # Asegurar campos nuevos en perfiles existentes
+                    # Asegurar campos nuevos en perfiles existentes usando la plantilla por defecto
+                    default_tmpl = create_default_profile("")
                     for p in profiles:
-                        if "player_engine" not in p:
-                            p["player_engine"] = "mpv"
-                        if "hwdec_mode" not in p:
-                            p["hwdec_mode"] = "drm-copy"
-                        if "audio_boost" not in p:
-                            p["audio_boost"] = True
-                        if "scarlett_enabled" not in p:
-                            p["scarlett_enabled"] = True
-                        if "scarlett_gain_12" not in p:
-                            p["scarlett_gain_12"] = 120
-                        if "scarlett_gain_34" not in p:
-                            p["scarlett_gain_34"] = 120
-                        if "scarlett_gain_sub" not in p:
-                            p["scarlett_gain_sub"] = 130
-                        if "dual_hdmi_enabled" not in p:
-                            p["dual_hdmi_enabled"] = True
-                        if "dual_hdmi_mode" not in p:
-                            p["dual_hdmi_mode"] = "mirror"
-                        if "dual_hdmi_resolution" not in p:
-                            p["dual_hdmi_resolution"] = "auto"
-                        if "network_role" not in p:
-                            p["network_role"] = "standalone"
-                        if "osc_port" not in p:
-                            p["osc_port"] = 9000
-                        if "osc_broadcast_ip" not in p:
-                            p["osc_broadcast_ip"] = "255.255.255.255"
-                        if "osc_mappings" not in p:
-                            p["osc_mappings"] = dict(DEFAULT_OSC_MAPPINGS)
-                        if "device_name" not in p:
-                            p["device_name"] = p.get("name", "Sala")
-                        if "device_floor" not in p:
-                            p["device_floor"] = "Planta Baja"
-                        if "web_control_enabled" not in p:
-                            p["web_control_enabled"] = True
-                        if "web_control_port" not in p:
-                            p["web_control_port"] = 8080
-                        if "web_control_pin" not in p or p.get("web_control_pin") == "1234":
+                        for k, v in default_tmpl.items():
+                            if k not in p:
+                                p[k] = dict(v) if isinstance(v, dict) else v
+                        if p.get("web_control_pin") == "1234":
                             p["web_control_pin"] = ""
+                        if not p.get("device_name"):
+                            p["device_name"] = p.get("name", "Sala")
                     self.data["profiles"] = profiles
             except Exception as e:
                 print(f"Error cargando configuración: {e}")

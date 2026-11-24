@@ -270,14 +270,19 @@ class MPVController:
             return True
         if not os.path.exists(self.socket_path):
             return False
+        s = None
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.connect(self.socket_path)
             s.settimeout(0.5)
             self._sock = s
             return True
-        except Exception as e:
-            # print(f"Error conectando al socket MPV: {e}")
+        except Exception:
+            if s:
+                try:
+                    s.close()
+                except Exception:
+                    pass
             self._sock = None
             return False
 
@@ -288,9 +293,16 @@ class MPVController:
         try:
             if not self._secondary_sock:
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                s.connect(self.secondary_socket_path)
-                s.settimeout(0.2)
-                self._secondary_sock = s
+                try:
+                    s.connect(self.secondary_socket_path)
+                    s.settimeout(0.2)
+                    self._secondary_sock = s
+                except Exception:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+                    raise
             req = {"command": command, "request_id": self._request_id}
             self._secondary_sock.sendall((json.dumps(req) + "\n").encode("utf-8"))
         except Exception:

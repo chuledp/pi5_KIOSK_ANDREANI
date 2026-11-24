@@ -21,12 +21,6 @@ from core.autostart import AutostartManager, build_vlc_command
 from core.dual_display import detect_hdmi_outputs, enable_dual_hdmi_mirror
 from core.sync_runner import SyncDaemon
 from core.osc_receiver import OSCReceiver
-from core.scarlett_mixer import (
-    detect_scarlett_card,
-    configure_scarlett_8i6_hardware,
-    apply_scarlett_mix_levels,
-    launch_scarlett_gui,
-)
 from core.web_control.discovery import get_local_ip
 from core.web_control import start_web_control, WebControlServer
 try:
