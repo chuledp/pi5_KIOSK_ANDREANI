@@ -176,6 +176,26 @@ class TestFleetManagerServer(unittest.TestCase):
             else:
                 raise
 
+    def test_api_fleet_guardian(self):
+        url = f"http://127.0.0.1:{self.port}/api/fleet/guardian"
+        try:
+            body = json.dumps({"action": "fix_handshake"}).encode("utf-8")
+            req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                self.assertEqual(resp.status, 200)
+                data = json.loads(resp.read().decode("utf-8"))
+                self.assertTrue(data.get("success"))
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError) as e:
+            if isinstance(e, urllib.error.HTTPError) and e.fp:
+                try:
+                    e.close()
+                except Exception:
+                    pass
+            if "Direct IP access" in str(e) or "Operation not permitted" in str(e) or "Bad Request" in str(e):
+                pass
+            else:
+                raise
+
 
 if __name__ == "__main__":
     unittest.main()

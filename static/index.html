@@ -599,6 +599,27 @@
       </div>
     </div>
 
+    <!-- BARRA DE BLINDAJE KIOSK (PROTECCIÓN DE FASE Y HANDSHAKE) -->
+    <div style="background: linear-gradient(90deg, #101c2e 0%, var(--card) 100%); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.2);">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+          🛡️ BLINDAJE DE FASE:
+        </span>
+        <button class="btn" style="background: rgba(20, 184, 166, 0.15); border-color: rgba(20, 184, 166, 0.4); color: var(--teal);" onclick="triggerFleetGuardian('enable_readonly')">
+          🛡️ Proteger Flota (SD Read-Only para Fase)
+        </button>
+        <button class="btn" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: var(--amber);" onclick="triggerFleetGuardian('disable_readonly')">
+          🔓 Modo Mantenimiento Flota (Permitir Escritura)
+        </button>
+        <button class="btn" style="background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); color: var(--purple);" onclick="triggerFleetGuardian('fix_handshake')">
+          📽️ Blindar Handshake Proyectores
+        </button>
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-dim);">
+        Corte directo por llave térmica sin soft-power
+      </div>
+    </div>
+
     <!-- GRID DE TARJETAS POR SALA -->
     <div class="fleet-grid" id="fleet-grid">
       <!-- Se puebla dinámicamente con las Raspberry Pis -->
@@ -711,6 +732,18 @@
 
         <!-- PESTAÑA 3: SISTEMA & DIAGNÓSTICO -->
         <div class="tab-content" id="tab-system">
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-weight: 700; font-size: 0.9rem; color: var(--text);">🛡️ Blindaje de Fase & Handshake Proyector</div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button class="btn" style="color: var(--teal);" onclick="executeGuardianAction('enable_readonly')">🛡️ Activar SD Read-Only (Corte Fase)</button>
+              <button class="btn" style="color: var(--amber);" onclick="executeGuardianAction('disable_readonly')">🔓 Modo Mantenimiento (Escritura)</button>
+              <button class="btn" style="color: var(--purple);" onclick="executeGuardianAction('fix_handshake')">📽️ Forzar Handshake HDMI</button>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">
+              Permite apagar la Raspberry Pi desde la llave térmica sin dañar la tarjeta SD.
+            </div>
+          </div>
+
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <button class="btn" onclick="executeSystemAction('git_pull')">🔄 Actualizar Software (git pull)</button>
             <button class="btn" onclick="executeSystemAction('restart_player')">⟳ Reiniciar Reproductor</button>
@@ -1137,6 +1170,45 @@
         if (action === "reboot" || action === "shutdown") closeDetailModal();
       } catch (e) {
         showToast("Error ejecutando acción");
+      }
+    }
+
+    async function executeGuardianAction(action) {
+      if (!activeModalIp) return;
+      const desc = action === "enable_readonly" ? "Activar SD Read-Only (Corte de Fase)" :
+                   (action === "disable_readonly" ? "Desactivar Protección (Permitir Escritura)" : "Forzar Handshake HDMI con Proyector");
+      if (!confirm(`¿Deseás ejecutar: ${desc} en ${activeModalIp}?`)) return;
+
+      showToast(`Ejecutando ${desc}...`);
+      try {
+        const res = await fetch(`/api/device/${activeModalIp}/guardian`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: action })
+        });
+        const data = await res.json();
+        showToast(data.message || (data.success ? "Acción aplicada" : "Error"));
+      } catch (e) {
+        showToast("Error al conectar con la Pi");
+      }
+    }
+
+    async function triggerFleetGuardian(action) {
+      const desc = action === "enable_readonly" ? "ACTIVAR MODO SOLO LECTURA (OVERLAYFS) EN TODA LA FLOTA para corte directo de luz" :
+                   (action === "disable_readonly" ? "DESACTIVAR PROTECCIÓN EN TODA LA FLOTA para permitir edición y carga de videos" : "FORZAR HANDSHAKE HDMI EN TODOS LOS PROYECTORES");
+      if (!confirm(`¿Estás seguro de que deseás ${desc}?\n\nEsta orden se aplicará en paralelo a todas las Raspberry Pis detectadas.`)) return;
+
+      showToast(`Aplicando ${action} a toda la flota...`);
+      try {
+        const res = await fetch("/api/fleet/guardian", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: action })
+        });
+        const data = await res.json();
+        showToast("✓ Orden de blindaje enviada a toda la flota");
+      } catch (e) {
+        showToast("Error enviando orden a la flota");
       }
     }
 

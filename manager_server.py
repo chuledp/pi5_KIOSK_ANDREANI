@@ -169,6 +169,13 @@ class FleetRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"success": True, "logs": logs})
             return
 
+        # 6. API: Estado de blindaje SD y proyectores (/api/device/<ip>/guardian)
+        elif path.startswith("/api/device/") and path.endswith("/guardian"):
+            ip = path.split("/")[3]
+            status = self.app.ssh.get_remote_guardian_status(ip)
+            self._send_json({"success": True, "guardian": status})
+            return
+
         # 6. Servir archivos estáticos del frontend
         if path == "/" or path == "/index.html":
             file_path = os.path.join(STATIC_DIR, "index.html")
@@ -262,10 +269,46 @@ class FleetRequestHandler(BaseHTTPRequestHandler):
                 ok, msg = self.app.ssh.git_pull_remote(ip)
             elif action == "restart_player":
                 ok, msg = self.app.ssh.restart_player_service(ip)
+            elif action == "enable_readonly":
+                ok, msg = self.app.ssh.enable_remote_phase_cut_protection(ip)
+            elif action == "disable_readonly":
+                ok, msg = self.app.ssh.disable_remote_phase_cut_protection(ip)
+            elif action == "fix_handshake":
+                ok, msg = self.app.ssh.apply_remote_projector_handshake(ip)
             else:
                 ok, msg = False, f"Acción desconocida: {action}"
 
             self._send_json({"success": ok, "message": msg})
+            return
+
+        # 7. API: Blindaje de toda la flota (/api/fleet/guardian)
+        elif path == "/api/fleet/guardian":
+            body = self._read_json_body()
+            action = body.get("action")
+            devices = self.app.discovery.get_all_devices()
+            results = {}
+            lock = threading.Lock()
+
+            def _guardian_task(d):
+                dev_ip = d.get("ip")
+                if not dev_ip or not d.get("online", True):
+                    return
+                if action == "enable_readonly":
+                    res_ok, res_msg = self.app.ssh.enable_remote_phase_cut_protection(dev_ip)
+                elif action == "disable_readonly":
+                    res_ok, res_msg = self.app.ssh.disable_remote_phase_cut_protection(dev_ip)
+                elif action == "fix_handshake":
+                    res_ok, res_msg = self.app.ssh.apply_remote_projector_handshake(dev_ip)
+                else:
+                    res_ok, res_msg = False, "Acción desconocida"
+                with lock:
+                    results[dev_ip] = {"success": res_ok, "message": res_msg}
+
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                list(pool.map(_guardian_task, devices))
+
+            self._send_json({"success": True, "results": results})
             return
 
         # 7. API: Guardar credenciales globales

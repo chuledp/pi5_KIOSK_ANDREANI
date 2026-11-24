@@ -334,3 +334,132 @@ else:
         self.run_command(ip, cmd, timeout=5)
         return True, "Orden de apagado enviada"
 
+    def get_remote_guardian_status(self, ip: str) -> Dict[str, Any]:
+        """Consulta el estado de protección contra corte de fase y handshake de proyectores en la Pi."""
+        remote_script = """python3 -c "
+import json, os, sys
+
+status = {
+    'overlayfs_active': False,
+    'swap_disabled': True,
+    'hdmi_kms_forced': False,
+    'hdmi_hotplug_forced': False,
+    'sd_status_text': '⚠️ Modo Escritura (Vulnerable a corte directo)',
+    'hdmi_status_text': '⚠️ Handshake Estándar'
+}
+
+try:
+    with open('/proc/mounts', 'r') as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) >= 3 and parts[1] == '/':
+                if 'overlay' in parts[0] or 'overlay' in parts[2]:
+                    status['overlayfs_active'] = True
+                    status['sd_status_text'] = '🛡️ PROTEGIDA (Modo Solo Lectura / OverlayFS)'
+                    break
+except Exception:
+    pass
+
+try:
+    with open('/proc/swaps', 'r') as f:
+        lines = [l.strip() for l in f if l.strip()]
+        status['swap_disabled'] = (len(lines) <= 1)
+except Exception:
+    pass
+
+for cl in ['/boot/firmware/cmdline.txt', '/boot/cmdline.txt']:
+    if os.path.exists(cl):
+        try:
+            with open(cl, 'r') as f:
+                c = f.read()
+            if 'video=HDMI-A-1:' in c and 'D' in c:
+                status['hdmi_kms_forced'] = True
+                status['hdmi_status_text'] = '✓ Handshake Blindado (Digital Continuo)'
+        except Exception:
+            pass
+        break
+
+for cf in ['/boot/firmware/config.txt', '/boot/config.txt']:
+    if os.path.exists(cf):
+        try:
+            with open(cf, 'r') as f:
+                c = f.read()
+            if 'hdmi_force_hotplug=1' in c:
+                status['hdmi_hotplug_forced'] = True
+        except Exception:
+            pass
+        break
+
+print(json.dumps(status))
+" """
+        code, stdout, stderr = self.run_command(ip, remote_script, timeout=8)
+        if code == 0 and stdout.strip():
+            try:
+                import json
+                return json.loads(stdout.strip())
+            except Exception:
+                pass
+        return {
+            "overlayfs_active": False,
+            "sd_status_text": "No disponible",
+            "hdmi_status_text": "No disponible"
+        }
+
+    def enable_remote_phase_cut_protection(self, ip: str) -> Tuple[bool, str]:
+        """Activa OverlayFS (Read-Only) y deshabilita swap en la Pi remota."""
+        cmd = (
+            "sudo dphys-swapfile swapoff 2>/dev/null || true; "
+            "sudo dphys-swapfile uninstall 2>/dev/null || true; "
+            "sudo systemctl disable dphys-swapfile 2>/dev/null || true; "
+            "sudo raspi-config nonint enable_overlayfs 2>/dev/null && "
+            "sudo raspi-config nonint enable_bootro 2>/dev/null || "
+            "python3 -c 'from core.kiosk_guardian import enable_phase_cut_protection; enable_phase_cut_protection()' 2>/dev/null || true"
+        )
+        code, stdout, stderr = self.run_command(ip, cmd, timeout=15)
+        if code == 0:
+            return True, "Protección contra cortes de fase (Read-Only / OverlayFS) activada. Reiniciá la Pi para blindarla."
+        return False, stderr or stdout or "Error activando protección en la Pi"
+
+    def disable_remote_phase_cut_protection(self, ip: str) -> Tuple[bool, str]:
+        """Desactiva OverlayFS en la Pi remota para entrar en Modo Mantenimiento (Lectura/Escritura)."""
+        cmd = (
+            "sudo raspi-config nonint disable_bootro 2>/dev/null; "
+            "sudo raspi-config nonint disable_overlayfs 2>/dev/null || "
+            "python3 -c 'from core.kiosk_guardian import disable_phase_cut_protection; disable_phase_cut_protection()' 2>/dev/null || true"
+        )
+        code, stdout, stderr = self.run_command(ip, cmd, timeout=15)
+        if code == 0:
+            return True, "Modo Mantenimiento activado. Reiniciá la Pi para permitir escritura de nuevos videos o ajustes."
+        return False, stderr or stdout or "Error desactivando OverlayFS en la Pi"
+
+    def apply_remote_projector_handshake(self, ip: str) -> Tuple[bool, str]:
+        """Inyecta parámetros de forzado de señal HDMI permanente en la Pi remota."""
+        cmd = """sudo python3 -c "
+import os
+
+for cl in ['/boot/firmware/cmdline.txt', '/boot/cmdline.txt']:
+    if os.path.exists(cl):
+        with open(cl, 'r') as f:
+            c = f.read().strip()
+        if 'video=HDMI-A-1:' not in c:
+            c += ' video=HDMI-A-1:1920x1080@60D video=HDMI-A-2:1920x1080@60D'
+            with open(cl, 'w') as f:
+                f.write(c + '\\n')
+        break
+
+for cf in ['/boot/firmware/config.txt', '/boot/config.txt']:
+    if os.path.exists(cf):
+        with open(cf, 'r') as f:
+            c = f.read()
+        block = '\\nhdmi_force_hotplug=1\\nhdmi_force_hotplug:0=1\\nhdmi_force_hotplug:1=1\\nhdmi_drive=2\\nhdmi_drive:0=2\\nhdmi_drive:1=2\\nconfig_hdmi_boost=7\\nconfig_hdmi_boost:0=7\\nconfig_hdmi_boost:1=7\\ndisable_overscan=1\\n'
+        if 'hdmi_force_hotplug=1' not in c:
+            with open(cf, 'a') as f:
+                f.write(block)
+        break
+print('HANDSHAKE_OK')
+" """
+        code, stdout, stderr = self.run_command(ip, cmd, timeout=12)
+        if "HANDSHAKE_OK" in stdout:
+            return True, "Handshake y señal HDMI continua configurados con éxito en la Pi."
+        return False, stderr or stdout or "Error configurando handshake en la Pi"
+
