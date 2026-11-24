@@ -10,7 +10,8 @@ import json
 import time
 import threading
 import mimetypes
-import cgi
+import email
+import re
 from typing import Dict, Any, Optional
 from http.server import HTTPServer, BaseHTTPRequestHandler
 try:
@@ -296,32 +297,37 @@ class FleetRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            # Leer datos del formulario multipart
-            environ = {
-                'REQUEST_METHOD': 'POST',
-                'CONTENT_TYPE': self.headers['Content-Type'],
-                'CONTENT_LENGTH': self.headers.get('Content-Length', '0')
-            }
-            form = cgi.FieldStorage(
-                fp=self.rfile,
-                headers=self.headers,
-                environ=environ,
-                keep_blank_values=True
-            )
+            length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(length)
 
-            file_item = form['file'] if 'file' in form else None
-            auto_play = str(form.getvalue('auto_play', 'true')).lower() == 'true'
+            # Parsear multipart usando módulo estándar email
+            mime_header = f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("latin-1")
+            msg = email.message_from_bytes(mime_header + raw_body)
 
-            if not file_item or not file_item.filename:
-                self._send_json({"success": False, "error": "No se recibió archivo de video"}, status=400)
+            file_payload = None
+            filename = None
+            auto_play = True
+
+            for part in msg.walk():
+                if part.is_multipart():
+                    continue
+                cd = part.get("Content-Disposition", "")
+                if 'name="auto_play"' in cd:
+                    val = (part.get_payload(decode=True) or b"").decode("utf-8").strip().lower()
+                    auto_play = (val == "true")
+                elif 'name="file"' in cd:
+                    m = re.search(r'filename="([^"]+)"', cd)
+                    if m:
+                        filename = os.path.basename(m.group(1))
+                        file_payload = part.get_payload(decode=True)
+
+            if not file_payload or not filename:
+                self._send_json({"success": False, "error": "No se recibió archivo de video válido"}, status=400)
                 return
 
-            filename = os.path.basename(file_item.filename)
             local_save_path = os.path.join(UPLOADS_DIR, filename)
-
-            # Guardar archivo en uploads/ local de la notebook
             with open(local_save_path, "wb") as f:
-                f.write(file_item.file.read())
+                f.write(file_payload)
 
             # Transferir por SCP a la Raspberry Pi
             ok, remote_dest = self.app.ssh.upload_video_file(ip, local_save_path)
