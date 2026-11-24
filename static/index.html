@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiosk Fleet Manager • Torre de Control</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #151c2c;
+      --card-border: #232f45;
+      --card-hover: #1c263c;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --radius: 14px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 50px;
+    }
+
+    /* BARRA SUPERIOR */
+    header {
+      background: rgba(21, 28, 44, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 28px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary), #6366f1);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    }
+    .brand-title {
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .brand-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .badge-count {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: var(--success);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--success);
+      border-radius: 50%;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.84rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover { background: rgba(255, 255, 255, 0.15); }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--primary); border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: var(--danger); }
+    .btn-danger:hover { background: var(--danger); color: white; }
+
+    /* CONTENEDOR PRINCIPAL */
+    main {
+      max-width: 1350px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 24px 0 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* BARRA MAESTRA FLOTA */
+    .master-bar {
+      background: linear-gradient(180deg, #182235 0%, var(--card) 100%);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 18px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    }
+    .master-controls {
+      display: flex;
+      gap: 12px;
+    }
+    .btn-master {
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.92rem;
+      border: none;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.12s;
+    }
+    .btn-master:active { transform: scale(0.96); }
+    .btn-play-all { background: linear-gradient(135deg, #10b981, #059669); }
+    .btn-pause-all { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .btn-reset-all { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+
+    .master-vol-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 280px;
+    }
+    .master-vol-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .vol-slider {
+      flex: 1;
+      height: 6px;
+      -webkit-appearance: none;
+      background: var(--card-border);
+      border-radius: 6px;
+      outline: none;
+    }
+    .vol-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+    }
+
+    /* GRID DE TARJETAS POR SALA */
+    .fleet-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 20px;
+    }
+
+    .pi-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .pi-card:hover {
+      border-color: rgba(37, 99, 235, 0.4);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    }
+    .pi-card.offline {
+      opacity: 0.6;
+      border-style: dashed;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .room-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ip-badge {
+      background: rgba(255,255,255,0.06);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+    .status-pill {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .status-playing { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-paused { background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .status-offline { background: rgba(100, 116, 139, 0.15); color: var(--text-dim); border: 1px solid rgba(100, 116, 139, 0.3); }
+
+    .video-info-box {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .video-name {
+      font-weight: 600;
+      font-size: 0.92rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+    .video-time {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 5px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .hw-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .hw-pill {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .quick-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-quick {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--text);
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .btn-quick:hover { background: rgba(255,255,255,0.15); }
+    .btn-manage {
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(37, 99, 235, 0.35);
+      color: #60a5fa;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-manage:hover { background: var(--primary); color: white; }
+
+    /* MODAL DE ADMINISTRACIÓN DE SALA */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.active { display: flex; }
+
+    .modal-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      max-width: 820px;
+      width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(21, 28, 44, 0.8);
+    }
+    .modal-header-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+    .btn-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-close:hover { color: var(--text); }
+
+    /* PESTAÑAS DEL MODAL */
+    .modal-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(0,0,0,0.2);
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 14px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      background: rgba(37, 99, 235, 0.05);
+    }
+
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .tab-content { display: none; flex-direction: column; gap: 20px; }
+    .tab-content.active { display: flex; }
+
+    /* ZONA DRAG & DROP */
+    .upload-zone {
+      border: 2px dashed rgba(255,255,255,0.2);
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      background: rgba(255,255,255,0.02);
+      transition: all 0.2s;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--primary);
+      background: rgba(37, 99, 235, 0.08);
+    }
+    .upload-icon { font-size: 2.2rem; margin-bottom: 8px; color: var(--primary); }
+    .upload-title { font-weight: 700; margin-bottom: 4px; }
+    .upload-sub { font-size: 0.8rem; color: var(--text-muted); }
+
+    /* LISTA DE VIDEOS REMOTOS */
+    .video-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+    .video-table th {
+      text-align: left;
+      padding: 10px;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--card-border);
+      text-transform: uppercase;
+      font-size: 0.74rem;
+    }
+    .video-table td {
+      padding: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .video-table tr:hover td {
+      background: rgba(255,255,255,0.03);
+    }
+
+    /* AJUSTES EN PESTAÑA 2 */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .setting-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .setting-title { font-weight: 700; font-size: 0.9rem; }
+    .form-row { display: flex; align-items: center; justify-content: space-between; }
+    .form-label { font-size: 0.85rem; color: var(--text-muted); }
+
+    /* LOGS EN PESTAÑA 3 */
+    .logs-console {
+      background: #05070c;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 14px;
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: #a7f3d0;
+      height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    /* TOAST FEEDBACK */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(21, 28, 44, 0.95);
+      border: 1px solid var(--card-border);
+      color: white;
+      padding: 14px 22px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      display: none;
+      z-index: 2000;
+      animation: fadeIn 0.2s ease;
+    }
+    #toast.show { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+  <!-- BARRA SUPERIOR -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">KIOSK FLEET MANAGER</div>
+        <div class="brand-sub">Torre de Control Centralizada • Video Kiosks</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="badge-count">
+        <div class="pulse-dot"></div>
+        <span id="devices-count-label">Detectando equipos...</span>
+      </div>
+      <button class="btn" onclick="triggerScan()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>Escanear Red</span>
+      </button>
+      <button class="btn" onclick="openConfigModal()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>Credenciales</span>
+      </button>
+      <button class="btn" onclick="openManualIpModal()">
+        <span>+ IP Manual</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- BARRA MAESTRA FLOTA -->
+    <div class="master-bar">
+      <div class="master-controls">
+        <button class="btn-master btn-play-all" onclick="sendMasterCommand('play')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          REPRODUCIR TODAS
+        </button>
+        <button class="btn-master btn-pause-all" onclick="sendMasterCommand('pause')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+          PAUSAR TODAS
+        </button>
+        <button class="btn-master btn-reset-all" onclick="sendMasterCommand('reset')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+          REINICIAR VIDEOS
+        </button>
+      </div>
+
+      <div class="master-vol-box">
+        <span class="master-vol-label">Volumen Edificio:</span>
+        <input type="range" class="vol-slider" min="0" max="150" value="100" id="master-vol-slider" onchange="sendMasterVolume(this.value)">
+        <span id="master-vol-val" style="font-weight: 700; min-width: 40px;">100%</span>
+      </div>
+    </div>
+
+    <!-- GRID DE TARJETAS POR SALA -->
+    <div class="fleet-grid" id="fleet-grid">
+      <!-- Se puebla dinámicamente con las Raspberry Pis -->
+    </div>
+  </main>
+
+  <!-- MODAL DE ADMINISTRACIÓN DE SALA -->
+  <div class="modal-backdrop" id="detail-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <div class="modal-header-title" id="modal-room-name">Sala 1</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);" id="modal-room-ip">IP: 10.204.79.108</div>
+        </div>
+        <button class="btn-close" onclick="closeDetailModal()">&times;</button>
+      </div>
+
+      <div class="modal-tabs">
+        <button class="tab-btn active" onclick="switchTab('videos')">🎬 Videos & Archivos</button>
+        <button class="tab-btn" onclick="switchTab('settings')">⚙️ Ajustes de Exhibición</button>
+        <button class="tab-btn" onclick="switchTab('system')">🛠️ Sistema & Diagnóstico</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- PESTAÑA 1: VIDEOS & ARCHIVOS -->
+        <div class="tab-content active" id="tab-videos">
+          <!-- ZONA DRAG & DROP -->
+          <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+            <input type="file" id="file-input" style="display: none;" accept="video/*" onchange="handleFileSelected(this.files[0])">
+            <div class="upload-icon">📁</div>
+            <div class="upload-title">Arrastrá un video nuevo aquí para subirlo a la Raspberry Pi</div>
+            <div class="upload-sub">Soporta .mp4, .mov, .mkv, .avi • Transferencia por SFTP</div>
+            <label style="margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.84rem; cursor: pointer;" onclick="event.stopPropagation()">
+              <input type="checkbox" id="upload-autoplay-cb" checked> Reproducir inmediatamente al terminar de subir
+            </label>
+          </div>
+
+          <!-- BARRA DE PROGRESO DE SUBIDA -->
+          <div id="upload-progress-box" style="display: none; background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px; border: 1px solid var(--card-border);">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">
+              <span id="upload-filename">Subiendo video...</span>
+              <span id="upload-percent">0%</span>
+            </div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="upload-progress-fill"></div></div>
+          </div>
+
+          <!-- TABLA DE VIDEOS EN LA PI -->
+          <div>
+            <div style="font-weight: 700; margin-bottom: 8px; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center;">
+              <span>Videos almacenados en esta Raspberry Pi:</span>
+              <button class="btn" style="padding: 4px 10px; font-size: 0.78rem;" onclick="loadRemoteVideos(activeModalIp)">Refrescar lista</button>
+            </div>
+            <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--card-border); border-radius: 8px;">
+              <table class="video-table">
+                <thead>
+                  <tr>
+                    <th>Archivo</th>
+                    <th>Tamaño</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="video-table-body">
+                  <tr><td colspan="3" style="text-align: center; color: var(--text-dim);">Cargando lista de videos...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PESTAÑA 2: AJUSTES DE EXHIBICIÓN -->
+        <div class="tab-content" id="tab-settings">
+          <div class="settings-grid">
+            <div class="setting-card">
+              <div class="setting-title">Reproducción</div>
+              <div class="form-row">
+                <span class="form-label">Bucle infinito (Loop):</span>
+                <input type="checkbox" id="set-loop" checked>
+              </div>
+              <div class="form-row">
+                <span class="form-label">Pantalla completa:</span>
+                <input type="checkbox" id="set-fullscreen" checked>
+              </div>
+              <div class="form-row">
+                <span class="form-label">Delay al arrancar (segundos):</span>
+                <input type="number" id="set-delay" value="5" min="0" max="60" style="width: 60px; background: #000; border: 1px solid var(--card-border); color: white; padding: 4px; border-radius: 6px;">
+              </div>
+            </div>
+
+            <div class="setting-card">
+              <div class="setting-title">Focusrite Scarlett 8i6 & Audio</div>
+              <div class="form-row">
+                <span class="form-label">Salidas 1-2 (Principal):</span>
+                <input type="range" class="vol-slider" min="0" max="150" value="120" id="set-scarlett-12">
+              </div>
+              <div class="form-row">
+                <span class="form-label">Salidas 3-4 (Secundarias):</span>
+                <input type="range" class="vol-slider" min="0" max="150" value="120" id="set-scarlett-34">
+              </div>
+              <div class="form-row">
+                <span class="form-label">Subwoofer (S/PDIF):</span>
+                <input type="range" class="vol-slider" min="0" max="150" value="130" id="set-scarlett-sub">
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" style="padding: 12px; justify-content: center; margin-top: 10px;" onclick="saveExhibitionSettings()">
+            💾 Guardar Ajustes en la Raspberry Pi
+          </button>
+        </div>
+
+        <!-- PESTAÑA 3: SISTEMA & DIAGNÓSTICO -->
+        <div class="tab-content" id="tab-system">
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn" onclick="executeSystemAction('git_pull')">🔄 Actualizar Software (git pull)</button>
+            <button class="btn" onclick="executeSystemAction('restart_player')">⟳ Reiniciar Reproductor</button>
+            <button class="btn btn-danger" onclick="executeSystemAction('reboot')">⚡ Reiniciar Pi</button>
+            <button class="btn btn-danger" onclick="executeSystemAction('shutdown')">⏻ Apagar Pi</button>
+          </div>
+
+          <div>
+            <div style="font-weight: 700; margin-bottom: 8px; font-size: 0.9rem; display: flex; justify-content: space-between;">
+              <span>Logs del Reproductor en Vivo:</span>
+              <button class="btn" style="padding: 4px 8px; font-size: 0.76rem;" onclick="loadLogs(activeModalIp)">Actualizar Logs</button>
+            </div>
+            <div class="logs-console" id="logs-console">Cargando logs...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIGURACIÓN SSH -->
+  <div class="modal-backdrop" id="config-modal">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <div class="modal-header-title">🔑 Credenciales SSH de las Pis</div>
+        <button class="btn-close" onclick="closeConfigModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+          Configurá el usuario y contraseña SSH por defecto de tus Raspberry Pi. Se recordarán en esta notebook de forma segura sin volver a pedir jamás.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Usuario SSH:</label>
+            <input type="text" id="cfg-ssh-user" value="pi" style="width: 100%; background: #000; border: 1px solid var(--card-border); color: white; padding: 10px; border-radius: 8px;">
+          </div>
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Contraseña SSH:</label>
+            <input type="password" id="cfg-ssh-pass" placeholder="Ingresá la contraseña" style="width: 100%; background: #000; border: 1px solid var(--card-border); color: white; padding: 10px; border-radius: 8px;">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="padding: 12px; justify-content: center; margin-top: 10px;" onclick="saveSshConfig()">Guardar Credenciales</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL IP MANUAL -->
+  <div class="modal-backdrop" id="manual-ip-modal">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-header-title">➕ Agregar Raspberry Pi Manual</div>
+        <button class="btn-close" onclick="closeManualIpModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Dirección IP:</label>
+            <input type="text" id="manual-ip" placeholder="ej: 10.204.79.108" style="width: 100%; background: #000; border: 1px solid var(--card-border); color: white; padding: 10px; border-radius: 8px;">
+          </div>
+          <div>
+            <label style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Nombre / Sala:</label>
+            <input type="text" id="manual-name" placeholder="ej: Sala 1 - Proyector Dual" style="width: 100%; background: #000; border: 1px solid var(--card-border); color: white; padding: 10px; border-radius: 8px;">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="padding: 12px; justify-content: center; margin-top: 10px;" onclick="addManualDevice()">Agregar al Panel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICACIÓN -->
+  <div id="toast">Acción completada</div>
+
+  <script>
+    let knownDevices = [];
+    let activeModalIp = "";
+    let activeModalDev = null;
+
+    // INICIALIZACIÓN
+    window.addEventListener("DOMContentLoaded", () => {
+      fetchFleet();
+      setInterval(fetchFleet, 2500);
+      setupDragAndDrop();
+    });
+
+    // COMUNICACIÓN API FLEET
+    async function fetchFleet() {
+      try {
+        const res = await fetch("/api/fleet");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.devices) {
+          knownDevices = data.devices;
+          renderFleet(data.devices);
+          updateHeaderCount(data.devices);
+        }
+      } catch (e) {
+        document.getElementById("devices-count-label").innerText = "Reconectando servidor local...";
+      }
+    }
+
+    function updateHeaderCount(devices) {
+      const online = devices.filter(d => d.online).length;
+      document.getElementById("devices-count-label").innerText = `${online} de ${devices.length} Pis Activas`;
+    }
+
+    // RENDERIZADO DE TARJETAS
+    function renderFleet(devices) {
+      const grid = document.getElementById("fleet-grid");
+      if (!devices || devices.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 60px; color: var(--text-dim);">
+            <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 8px;">🔍 Buscando Raspberry Pis en la red local...</div>
+            <div style="font-size: 0.88rem;">Asegurate de que las Pis y esta notebook estén en la misma red Wi-Fi o red interna.</div>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = devices.map(dev => {
+        const isOnline = Boolean(dev.online);
+        const status = (dev.status || (isOnline ? "playing" : "offline")).toLowerCase();
+        const statusClass = status === "playing" ? "status-playing" : (status === "paused" ? "status-paused" : "status-offline");
+        const statusText = status === "playing" ? "▶ REPRODUCIENDO" : (status === "paused" ? "⏸ PAUSADO" : "● DESCONECTADO");
+        const videoName = dev.current_file || "video_instalacion.mp4";
+        const timePos = dev.time_pos || 0;
+        const duration = dev.duration || 100;
+        const percent = duration > 0 ? Math.min(100, Math.round((timePos / duration) * 100)) : 0;
+        const hw = dev.hardware || {};
+
+        return `
+          <div class="pi-card ${isOnline ? '' : 'offline'}">
+            <div class="card-header">
+              <div>
+                <div class="room-title">
+                  <span>${escapeHtml(dev.name || 'Raspberry Pi')}</span>
+                  <span class="ip-badge">${dev.ip}</span>
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">${escapeHtml(dev.floor || 'Sala')}</div>
+              </div>
+              <div class="status-pill ${statusClass}">${statusText}</div>
+            </div>
+
+            <div class="video-info-box">
+              <div class="video-name" title="${escapeHtml(videoName)}">🎬 ${escapeHtml(videoName)}</div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: ${percent}%;"></div>
+              </div>
+              <div class="video-time">
+                <span>${formatTime(timePos)}</span>
+                <span>${formatTime(duration)}</span>
+              </div>
+            </div>
+
+            <div class="hw-pills">
+              <div class="hw-pill">🌡️ ${hw.cpu_temp ? hw.cpu_temp + '°C' : 'Normal'}</div>
+              <div class="hw-pill">💾 ${hw.disk_free_gb ? hw.disk_free_gb + ' GB libres' : 'SD OK'}</div>
+              <div class="hw-pill">🔊 ${dev.volume || 100}%</div>
+            </div>
+
+            <div class="card-footer">
+              <div class="quick-actions">
+                <button class="btn-quick" onclick="sendDeviceCommand('${dev.ip}', 'toggle')" title="Play / Pausa">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                </button>
+                <button class="btn-quick" onclick="sendDeviceCommand('${dev.ip}', 'reset')" title="Reiniciar video a 00:00">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              </div>
+              <button class="btn-manage" onclick="openDetailModal('${dev.ip}')">
+                <span>⚙️ Administrar Sala</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // COMANDOS DE REPRODUCCIÓN
+    async function sendMasterCommand(action) {
+      showToast(`Enviando comando '${action}' a todo el edificio...`);
+      try {
+        await fetch("/api/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: action, target: "all" })
+        });
+        setTimeout(fetchFleet, 300);
+      } catch (e) {
+        showToast("Error enviando comando maestro");
+      }
+    }
+
+    async function sendDeviceCommand(ip, action) {
+      try {
+        await fetch("/api/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ip: ip, action: action, target: "device" })
+        });
+        setTimeout(fetchFleet, 300);
+      } catch (e) {
+        showToast("Error comunicando con la Pi");
+      }
+    }
+
+    async function sendMasterVolume(val) {
+      document.getElementById("master-vol-val").innerText = val + "%";
+      try {
+        await fetch("/api/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "volume", target: "all", value: parseInt(val) })
+        });
+      } catch (e) {}
+    }
+
+    // MODAL DE DETALLE Y PESTAÑAS
+    function openDetailModal(ip) {
+      activeModalIp = ip;
+      activeModalDev = knownDevices.find(d => d.ip === ip);
+      document.getElementById("modal-room-name").innerText = activeModalDev ? activeModalDev.name : `Raspberry ${ip}`;
+      document.getElementById("modal-room-ip").innerText = `Dirección IP: ${ip} • Rol: ${(activeModalDev && activeModalDev.engine) || 'MPV'}`;
+      document.getElementById("detail-modal").classList.add("active");
+      switchTab('videos');
+      loadRemoteVideos(ip);
+      loadLogs(ip);
+    }
+
+    function closeDetailModal() {
+      document.getElementById("detail-modal").classList.remove("active");
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+
+      if (tabId === 'videos') {
+        document.querySelectorAll(".tab-btn")[0].classList.add("active");
+        document.getElementById("tab-videos").classList.add("active");
+      } else if (tabId === 'settings') {
+        document.querySelectorAll(".tab-btn")[1].classList.add("active");
+        document.getElementById("tab-settings").classList.add("active");
+      } else if (tabId === 'system') {
+        document.querySelectorAll(".tab-btn")[2].classList.add("active");
+        document.getElementById("tab-system").classList.add("active");
+      }
+    }
+
+    // LISTAR VIDEOS REMOTOS
+    async function loadRemoteVideos(ip) {
+      const tbody = document.getElementById("video-table-body");
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-dim);">Consultando videos en la Pi...</td></tr>`;
+
+      try {
+        const res = await fetch(`/api/device/${ip}/videos`);
+        const data = await res.json();
+        if (data.success && data.videos && data.videos.length > 0) {
+          tbody.innerHTML = data.videos.map(v => `
+            <tr>
+              <td>
+                <div style="font-weight: 600;">${escapeHtml(v.name)}</div>
+                <div style="font-size: 0.72rem; color: var(--text-dim);">${escapeHtml(v.path)}</div>
+              </td>
+              <td>${v.size_mb} MB</td>
+              <td>
+                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.78rem;" onclick="switchVideo('${ip}', '${escapeHtml(v.path)}')">
+                  ▶ Reproducir
+                </button>
+              </td>
+            </tr>
+          `).join("");
+        } else {
+          tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-dim);">No se encontraron videos en /home/pi/Videos</td></tr>`;
+        }
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--danger);">Error conectando por SSH a la Pi</td></tr>`;
+      }
+    }
+
+    async function switchVideo(ip, remotePath) {
+      showToast("Cambiando video en la Pi...");
+      try {
+        const res = await fetch(`/api/device/${ip}/switch_video`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ video_path: remotePath })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("✓ " + data.message);
+          setTimeout(fetchFleet, 500);
+        } else {
+          showToast(data.error || "No se pudo cambiar el video");
+        }
+      } catch (e) {
+        showToast("Error de conexión");
+      }
+    }
+
+    // DRAG & DROP Y SUBIDA DE VIDEOS
+    function setupDragAndDrop() {
+      const zone = document.getElementById("upload-zone");
+      ['dragenter', 'dragover'].forEach(name => {
+        zone.addEventListener(name, (e) => { e.preventDefault(); zone.classList.add("dragover"); }, false);
+      });
+      ['dragleave', 'drop'].forEach(name => {
+        zone.addEventListener(name, (e) => { e.preventDefault(); zone.classList.remove("dragover"); }, false);
+      });
+      zone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) handleFileSelected(files[0]);
+      }, false);
+    }
+
+    function handleFileSelected(file) {
+      if (!file || !activeModalIp) return;
+      uploadVideoToPi(activeModalIp, file);
+    }
+
+    function uploadVideoToPi(ip, file) {
+      const box = document.getElementById("upload-progress-box");
+      const nameEl = document.getElementById("upload-filename");
+      const fillEl = document.getElementById("upload-progress-fill");
+      const pctEl = document.getElementById("upload-percent");
+      const autoPlay = document.getElementById("upload-autoplay-cb").checked;
+
+      box.style.display = "block";
+      nameEl.innerText = `Subiendo: ${file.name} (${Math.round(file.size / 1024 / 1024)} MB)`;
+      fillEl.style.width = "0%";
+      pctEl.innerText = "0%";
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("auto_play", autoPlay ? "true" : "false");
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/device/${ip}/upload`, true);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          fillEl.style.width = pct + "%";
+          pctEl.innerText = pct + "%";
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          showToast(`✓ Video '${file.name}' subido con éxito`);
+          box.style.display = "none";
+          loadRemoteVideos(ip);
+          setTimeout(fetchFleet, 500);
+        } else {
+          showToast("Error al subir video a la Raspberry Pi");
+          box.style.display = "none";
+        }
+      };
+
+      xhr.onerror = () => {
+        showToast("Error en la transferencia");
+        box.style.display = "none";
+      };
+
+      xhr.send(formData);
+    }
+
+    // AJUSTES DE EXHIBICIÓN
+    async function saveExhibitionSettings() {
+      if (!activeModalIp) return;
+      const settings = {
+        loop: document.getElementById("set-loop").checked,
+        fullscreen: document.getElementById("set-fullscreen").checked,
+        delay_seconds: parseInt(document.getElementById("set-delay").value || 5),
+        scarlett_vol_12: parseInt(document.getElementById("set-scarlett-12").value || 120),
+        scarlett_vol_34: parseInt(document.getElementById("set-scarlett-34").value || 120),
+        scarlett_vol_sub: parseInt(document.getElementById("set-scarlett-sub").value || 130)
+      };
+
+      showToast("Guardando ajustes en la Pi...");
+      try {
+        const res = await fetch(`/api/device/${activeModalIp}/settings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings: settings, restart: true })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("✓ " + data.message);
+        } else {
+          showToast(data.error || "Error guardando ajustes");
+        }
+      } catch (e) {
+        showToast("Error conectando con la Pi");
+      }
+    }
+
+    // ACCIONES DE SISTEMA & LOGS
+    async function loadLogs(ip) {
+      const consoleEl = document.getElementById("logs-console");
+      consoleEl.innerText = "Consultando logs del reproductor...";
+      try {
+        const res = await fetch(`/api/device/${ip}/logs`);
+        const data = await res.json();
+        consoleEl.innerText = data.logs || "No hay logs disponibles";
+      } catch (e) {
+        consoleEl.innerText = "Error leyendo logs por SSH";
+      }
+    }
+
+    async function executeSystemAction(action) {
+      if (!activeModalIp) return;
+      if (action === "reboot" && !confirm("¿Estás seguro de que deseás REINICIAR esta Raspberry Pi?")) return;
+      if (action === "shutdown" && !confirm("¿Estás seguro de que deseás APAGAR esta Raspberry Pi?")) return;
+
+      showToast(`Ejecutando ${action}...`);
+      try {
+        const res = await fetch(`/api/device/${activeModalIp}/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: action })
+        });
+        const data = await res.json();
+        showToast(data.message || "Acción enviada");
+        if (action === "reboot" || action === "shutdown") closeDetailModal();
+      } catch (e) {
+        showToast("Error ejecutando acción");
+      }
+    }
+
+    // CONFIGURACIÓN SSH MODAL
+    async function openConfigModal() {
+      try {
+        const res = await fetch("/api/config");
+        const data = await res.json();
+        if (data.config) {
+          document.getElementById("cfg-ssh-user").value = data.config.default_ssh_user || "pi";
+          document.getElementById("cfg-ssh-pass").value = data.config.default_ssh_password || "";
+        }
+      } catch (e) {}
+      document.getElementById("config-modal").classList.add("active");
+    }
+    function closeConfigModal() {
+      document.getElementById("config-modal").classList.remove("active");
+    }
+    async function saveSshConfig() {
+      const user = document.getElementById("cfg-ssh-user").value.trim();
+      const pass = document.getElementById("cfg-ssh-pass").value;
+      try {
+        await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ default_ssh_user: user, default_ssh_password: pass })
+        });
+        showToast("✓ Credenciales SSH guardadas");
+        closeConfigModal();
+      } catch (e) {
+        showToast("Error guardando credenciales");
+      }
+    }
+
+    // MODAL IP MANUAL
+    function openManualIpModal() { document.getElementById("manual-ip-modal").classList.add("active"); }
+    function closeManualIpModal() { document.getElementById("manual-ip-modal").classList.remove("active"); }
+    async function addManualDevice() {
+      const ip = document.getElementById("manual-ip").value.trim();
+      const name = document.getElementById("manual-name").value.trim();
+      if (!ip) return;
+      try {
+        await fetch("/api/manual_device", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ip: ip, name: name })
+        });
+        showToast("✓ Raspberry agregada");
+        closeManualIpModal();
+        fetchFleet();
+      } catch (e) {
+        showToast("Error agregando IP");
+      }
+    }
+
+    async function triggerScan() {
+      showToast("🔍 Escaneando red local...");
+      try {
+        await fetch("/api/scan", { method: "POST" });
+        await fetchFleet();
+        showToast("✓ Escaneo de red finalizado");
+      } catch (e) {
+        showToast("Error al escanear la red");
+      }
+    }
+
+    // UTILIDADES
+    let toastTimer = null;
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove("show"), 2800);
+    }
+
+    function formatTime(secs) {
+      if (!secs || secs < 0) return "00:00";
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
