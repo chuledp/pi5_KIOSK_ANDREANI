@@ -176,12 +176,15 @@ class FleetRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"success": True, "guardian": status})
             return
 
-        # 6. Servir archivos estáticos del frontend
+        # 7. Servir archivos estáticos del frontend
         if path == "/" or path == "/index.html":
             file_path = os.path.join(STATIC_DIR, "index.html")
         else:
             rel_path = path.lstrip("/")
-            file_path = os.path.join(STATIC_DIR, rel_path)
+            file_path = os.path.abspath(os.path.join(STATIC_DIR, rel_path))
+            if not file_path.startswith(os.path.abspath(STATIC_DIR)):
+                self.send_error(403, "Acceso denegado")
+                return
 
         if os.path.isfile(file_path):
             mime_type, _ = mimetypes.guess_type(file_path)
