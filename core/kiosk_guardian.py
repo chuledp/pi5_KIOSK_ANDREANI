@@ -82,6 +82,36 @@ def get_boot_config_paths() -> Tuple[Optional[str], Optional[str]]:
     return config_txt, cmdline_txt
 
 
+def _ensure_boot_writable() -> Optional[str]:
+    """
+    Si la partición de boot (/boot o /boot/firmware) está montada en solo lectura (ro),
+    la remonta temporalmente como rw para permitir actualizar configuraciones.
+    Retorna el punto de montaje modificado para re-protegerlo posteriormente.
+    """
+    if not sys.platform.startswith("linux"):
+        return None
+    for mount_pt in ["/boot/firmware", "/boot"]:
+        try:
+            with open("/proc/mounts", "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 4 and parts[1] == mount_pt and "ro" in parts[3].split(","):
+                        subprocess.run(["mount", "-o", "remount,rw", mount_pt], check=False)
+                        return mount_pt
+        except Exception:
+            pass
+    return None
+
+
+def _restore_boot_ro(mount_pt: Optional[str]) -> None:
+    """Restaura el montaje en modo solo lectura si fue modificado."""
+    if mount_pt and sys.platform.startswith("linux"):
+        try:
+            subprocess.run(["mount", "-o", "remount,ro", mount_pt], check=False)
+        except Exception:
+            pass
+
+
 def is_overlayfs_active() -> bool:
     """Detecta si el sistema de archivos raíz (/) está montado actualmente como OverlayFS en RAM."""
     if not sys.platform.startswith("linux"):
@@ -261,6 +291,7 @@ def enable_phase_cut_protection() -> Tuple[bool, str]:
     # 3. cmdline.txt: agregar fsck.mode=force fsck.repair=yes fastboot
     _, cmdline_txt = get_boot_config_paths()
     if cmdline_txt and os.path.exists(cmdline_txt):
+        remounted = _ensure_boot_writable()
         try:
             with open(cmdline_txt, "r", encoding="utf-8") as f:
                 line = f.read().strip()
@@ -275,6 +306,8 @@ def enable_phase_cut_protection() -> Tuple[bool, str]:
                 actions_taken.append("Auto-reparación fsck agregada a cmdline.txt")
         except Exception as e:
             print(f"Error modificando cmdline.txt: {e}")
+        finally:
+            _restore_boot_ro(remounted)
 
     # 4. Habilitar OverlayFS y Boot Read-Only vía raspi-config
     overlay_enabled = False
@@ -332,29 +365,37 @@ def apply_projector_handshake_fix(resolution: str = "1920x1080@60") -> Tuple[boo
     """
     config_txt, cmdline_txt = get_boot_config_paths()
     actions: List[str] = []
+    remounted = _ensure_boot_writable()
 
-    # 1. Configurar cmdline.txt (KMS DRM force digital display)
-    if cmdline_txt and os.path.exists(cmdline_txt):
-        try:
-            with open(cmdline_txt, "r", encoding="utf-8") as f:
-                content = f.read().strip()
+    try:
+        # 1. Configurar cmdline.txt (KMS DRM force digital display)
+        if cmdline_txt and os.path.exists(cmdline_txt):
+            try:
+                with open(cmdline_txt, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
 
-            target_cmd = f"video=HDMI-A-1:{resolution}D video=HDMI-A-2:{resolution}D"
-            if "video=HDMI-A-1:" not in content:
-                content = f"{content} {target_cmd}"
-                with open(cmdline_txt, "w", encoding="utf-8") as f:
-                    f.write(content + "\n")
-                actions.append(f"KMS DRM forzado digital ({resolution}D) en {os.path.basename(cmdline_txt)}")
-        except Exception as e:
-            print(f"Error escribiendo cmdline.txt: {e}")
+                target_cmd = f"video=HDMI-A-1:{resolution}D video=HDMI-A-2:{resolution}D"
+                if "video=HDMI-A-1:" not in content:
+                    content = f"{content} {target_cmd}"
+                    with open(cmdline_txt, "w", encoding="utf-8") as f:
+                        f.write(content + "\n")
+                    actions.append(f"KMS DRM forzado digital ({resolution}D) en {os.path.basename(cmdline_txt)}")
+                elif "video=HDMI-A-1:" in content and "D" not in content:
+                    content = re.sub(r"video=HDMI-A-1:[^\s]+", f"video=HDMI-A-1:{resolution}D", content)
+                    content = re.sub(r"video=HDMI-A-2:[^\s]+", f"video=HDMI-A-2:{resolution}D", content)
+                    with open(cmdline_txt, "w", encoding="utf-8") as f:
+                        f.write(content + "\n")
+                    actions.append(f"KMS DRM actualizado con bandera D ({resolution}D)")
+            except Exception as e:
+                print(f"Error escribiendo cmdline.txt: {e}")
 
-    # 2. Configurar config.txt (Firmware HDMI Hotplug & Boost)
-    if config_txt and os.path.exists(config_txt):
-        try:
-            with open(config_txt, "r", encoding="utf-8") as f:
-                cfg_content = f.read()
+        # 2. Configurar config.txt (Firmware HDMI Hotplug & Boost)
+        if config_txt and os.path.exists(config_txt):
+            try:
+                with open(config_txt, "r", encoding="utf-8") as f:
+                    cfg_content = f.read()
 
-            block = f"""
+                block = f"""
 # ========================================================
 # KIOSK GUARDIAN: Handshake Proyectores (Anti-Pantalla Negra)
 # ========================================================
@@ -376,18 +417,20 @@ hdmi_mode:1=16
 disable_overscan=1
 # ========================================================
 """
-            if "KIOSK GUARDIAN: Handshake Proyectores" not in cfg_content and "hdmi_force_hotplug=1" not in cfg_content:
-                cfg_content = cfg_content.rstrip() + "\n" + block
-                with open(config_txt, "w", encoding="utf-8") as f:
-                    f.write(cfg_content)
-                actions.append(f"HDMI Hotplug + Boost (7) inyectado en {os.path.basename(config_txt)}")
-            elif "config_hdmi_boost" not in cfg_content:
-                cfg_content += "\nconfig_hdmi_boost=7\nconfig_hdmi_boost:0=7\nconfig_hdmi_boost:1=7\n"
-                with open(config_txt, "w", encoding="utf-8") as f:
-                    f.write(cfg_content)
-                actions.append("config_hdmi_boost=7 añadido para cables largos de proyectores")
-        except Exception as e:
-            print(f"Error escribiendo config.txt: {e}")
+                if "KIOSK GUARDIAN: Handshake Proyectores" not in cfg_content and "hdmi_force_hotplug=1" not in cfg_content:
+                    cfg_content = cfg_content.rstrip() + "\n" + block
+                    with open(config_txt, "w", encoding="utf-8") as f:
+                        f.write(cfg_content)
+                    actions.append(f"HDMI Hotplug + Boost (7) inyectado en {os.path.basename(config_txt)}")
+                elif "config_hdmi_boost" not in cfg_content:
+                    cfg_content += "\nconfig_hdmi_boost=7\nconfig_hdmi_boost:0=7\nconfig_hdmi_boost:1=7\n"
+                    with open(config_txt, "w", encoding="utf-8") as f:
+                        f.write(cfg_content)
+                    actions.append("config_hdmi_boost=7 añadido para cables largos de proyectores")
+            except Exception as e:
+                print(f"Error escribiendo config.txt: {e}")
+    finally:
+        _restore_boot_ro(remounted)
 
     if not actions:
         if not sys.platform.startswith("linux"):
@@ -436,9 +479,12 @@ class HDMIWatchdog:
             return
 
         import glob
+        last_reconnect_time = 0.0
+
         while not self._stop_event.is_set():
             try:
                 changed = False
+                now = time.time()
                 status_files = sorted(glob.glob("/sys/class/drm/card*-HDMI-A-*/status"))
                 for sf in status_files:
                     try:
@@ -461,7 +507,9 @@ class HDMIWatchdog:
                     except Exception:
                         pass
 
-                if changed:
+                # Cooldown de 8 segundos entre re-activaciones para evitar sobrecarga de wlr-randr
+                if changed and (now - last_reconnect_time > 8.0):
+                    last_reconnect_time = now
                     print("[HDMIWatchdog] Cambio en proyector/HDMI detectado. Re-activando salidas...")
                     from core.dual_display import enable_dual_hdmi_mirror
                     enable_dual_hdmi_mirror()
