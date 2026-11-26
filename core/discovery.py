@@ -38,7 +38,7 @@ def get_local_ip() -> str:
 
 
 class FleetDiscovery:
-    def __init__(self, web_port: int = 8080, offline_timeout: float = 30.0):
+    def __init__(self, web_port: int = 8080, offline_timeout: float = 300.0):
         self.web_port = web_port
         self.offline_timeout = offline_timeout
         self._lock = threading.Lock()
@@ -46,12 +46,16 @@ class FleetDiscovery:
         self._scanning = False
 
     def probe_device(self, ip: str, port: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        """Intenta consultar la API REST de la Raspberry Pi en la IP dada."""
+        """Intenta consultar la API REST o el puerto SSH de la Raspberry Pi en la IP dada."""
+        # Evitar auto-descubrir la propia Mac
+        if ip == get_local_ip():
+            return None
+
         p = port or self.web_port
         url = f"http://{ip}:{p}/api/devices"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "KioskFleetManager/1.0"})
-            with urllib.request.urlopen(req, timeout=0.85) as resp:
+            with urllib.request.urlopen(req, timeout=0.6) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     devices_list = data.get("devices", [])
@@ -72,6 +76,26 @@ class FleetDiscovery:
                     }
         except Exception:
             pass
+
+        # Fallback inteligente: Si HTTP (8080) aún no está levantado, chequear si SSH (22) está activo
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.4)
+        try:
+            s.connect((ip, 22))
+            return {
+                "id": f"pi-{ip.replace('.', '-')}",
+                "name": f"Raspberry Pi ({ip})",
+                "ip": ip,
+                "port": p,
+                "status": "online",
+                "ssh_only": True,
+                "floor": "Sala"
+            }
+        except Exception:
+            pass
+        finally:
+            s.close()
+
         return None
 
     def scan_network(self, custom_subnets: Optional[List[str]] = None, max_workers: int = 40) -> List[Dict[str, Any]]:
@@ -108,6 +132,15 @@ class FleetDiscovery:
 
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 list(pool.map(_worker, candidates))
+
+            now = time.time()
+            with self._lock:
+                disc_ips = {x.get("ip") for x in discovered if x.get("ip")}
+                for d in self._devices.values():
+                    if d.get("ip") in disc_ips:
+                        d["last_seen"] = now
+                        d["status"] = "online"
+                        d["online"] = True
 
             return self.get_all_devices()
         finally:

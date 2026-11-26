@@ -922,27 +922,40 @@
 
     // COMANDOS DE REPRODUCCIÓN
     async function sendMasterCommand(action) {
-      showToast(`Enviando comando '${action}' a todo el edificio...`);
+      showToast(`Enviando comando '${action}' a todas las salas...`);
       try {
-        await fetch("/api/command", {
+        const res = await fetch("/api/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: action, target: "all" })
         });
-        setTimeout(fetchFleet, 300);
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Comando '${action}' enviado a la flota`);
+        } else {
+          showToast(`Aviso: ${data.error || data.message || 'Comando procesado'}`);
+        }
+        setTimeout(fetchFleet, 500);
       } catch (e) {
         showToast("Error enviando comando maestro");
       }
     }
 
     async function sendDeviceCommand(ip, action) {
+      showToast(`Enviando '${action}' a ${ip}...`);
       try {
-        await fetch("/api/command", {
+        const res = await fetch("/api/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ip: ip, action: action, target: "device" })
         });
-        setTimeout(fetchFleet, 300);
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Comando '${action}' ejecutado en ${ip}`);
+        } else {
+          showToast(`Error en ${ip}: ${data.error || data.message || 'Fallo de ejecución'}`);
+        }
+        setTimeout(fetchFleet, 500);
       } catch (e) {
         showToast("Error comunicando con la Pi");
       }

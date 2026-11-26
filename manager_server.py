@@ -43,6 +43,18 @@ class FleetManagerApp:
         self._stop_event = threading.Event()
         self._server = None
 
+        # Cargar dispositivos manuales configurados
+        for mdev in self.creds.get_config().get("manual_devices", []):
+            if isinstance(mdev, dict) and mdev.get("ip"):
+                self.discovery.register_device({
+                    "id": f"pi-{mdev['ip'].replace('.', '-')}",
+                    "name": mdev.get("name") or f"Raspberry Pi ({mdev['ip']})",
+                    "ip": mdev["ip"],
+                    "floor": mdev.get("floor", "Sala"),
+                    "status": "online",
+                    "online": True
+                })
+
     def start_background_monitors(self):
         """Inicia escaneo inicial y bucle de refresco continuo de estados."""
         def _initial_scan():
@@ -64,6 +76,27 @@ class FleetManagerApp:
                         if status:
                             status["ip"] = ip
                             self.discovery.register_device(status)
+                        else:
+                            # Fallback SSH: detectar si hay un reproductor corriendo
+                            code, out, _ = self.ssh.run_command(ip, "pgrep -a mpv || pgrep -a vlc || true", timeout=3)
+                            if code == 0 and out.strip():
+                                line = out.strip().splitlines()[0]
+                                player = "mpv" if "mpv" in line else "vlc"
+                                # Extraer el nombre del archivo de video
+                                video_name = "Video Activo"
+                                for part in line.split():
+                                    if part.endswith(".mp4") or part.endswith(".mkv") or part.endswith(".avi"):
+                                        video_name = os.path.basename(part)
+                                if video_name == "Video Activo" and "/" in line:
+                                    # Intentar tomar todo desde /home o /media
+                                    match = re.search(r"(/home/\S+?\.(mp4|mkv)|/media/\S+?\.(mp4|mkv))", line)
+                                    if match:
+                                        video_name = os.path.basename(match.group(1))
+                                dev["status"] = "playing"
+                                dev["active_video"] = video_name
+                                dev["player"] = player
+                                dev["online"] = True
+                                self.discovery.register_device(dev)
                 if self._stop_event.wait(3.0):
                     break
 
@@ -219,12 +252,36 @@ class FleetRequestHandler(BaseHTTPRequestHandler):
             val = body.get("value")
             ip = body.get("ip")
 
+            # Soporte directo de reinicio completo de hardware
+            if action == "reboot":
+                if ip:
+                    ok, msg = self.app.ssh.reboot_remote(ip)
+                    self._send_json({"success": ok, "message": msg})
+                else:
+                    devices = self.app.discovery.get_all_devices()
+                    for d in devices:
+                        if d.get("ip"):
+                            self.app.ssh.reboot_remote(d["ip"])
+                    self._send_json({"success": True, "message": "Reinicio enviado a todas las Pis"})
+                return
+
             if target == "all" or not ip:
                 devices = self.app.discovery.get_all_devices()
                 res = self.app.http.broadcast_to_all(devices, action, val)
+                # Fallback por SSH para cualquier dispositivo que no tenga puerto 8080 abierto
+                for d in devices:
+                    dip = d.get("ip")
+                    if dip and (not res.get("results", {}).get(dip) or d.get("ssh_only")):
+                        ok, _ = self.app.ssh.send_playback_control(dip, action, val)
+                        if ok:
+                            res["results"][dip] = True
                 self._send_json(res)
             else:
                 res = self.app.http.send_command(ip=ip, action=action, target=target, value=val)
+                if not res.get("success"):
+                    # Fallback inmediato por SSH (ej: MPV IPC socket en la Pi)
+                    ok, msg = self.app.ssh.send_playback_control(ip, action, val)
+                    res = {"success": ok, "message": msg}
                 self._send_json(res)
             return
 

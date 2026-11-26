@@ -6,6 +6,7 @@ de cada Raspberry Pi.
 import urllib.request
 import urllib.error
 import json
+import threading
 from typing import Dict, Any, List, Optional
 from concurrent.futures import ThreadPoolExecutor
 

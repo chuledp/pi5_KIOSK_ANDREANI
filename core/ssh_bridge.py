@@ -316,6 +316,71 @@ else:
         code, stdout, stderr = self.run_command(ip, cmd, timeout=8)
         return True, "Comando de reinicio de reproductor enviado"
 
+    def send_playback_control(self, ip: str, action: str, value: Any = None) -> Tuple[bool, str]:
+        """Controla reproducción (play, pause, toggle, reset, volume) en la Pi vía socket IPC o proceso."""
+        action = str(action or "play").lower().strip()
+        ipc_cmd = ""
+        if action in ("play", "unpause"):
+            ipc_cmd = '{"command": ["set_property", "pause", false]}'
+        elif action == "pause":
+            ipc_cmd = '{"command": ["set_property", "pause", true]}'
+        elif action in ("toggle", "play_pause"):
+            ipc_cmd = '{"command": ["cycle", "pause"]}'
+        elif action in ("reset", "restart", "rewind"):
+            ipc_cmd = '{"command": ["seek", 0, "absolute"]}'
+        elif action == "volume" and value is not None:
+            try:
+                v = int(value)
+                ipc_cmd = f'{{"command": ["set_property", "volume", {v}]}}'
+            except Exception:
+                ipc_cmd = ""
+
+        # Intento de comunicación con MPV IPC Socket o señales de proceso
+        remote_script = f"""python3 -c "
+import socket, json, subprocess, sys
+
+ipc_cmd = '''{ipc_cmd}'''
+handled = False
+
+if ipc_cmd.strip():
+    for sock in ['/tmp/mpv-autoplay-socket', '/tmp/mpvsocket', '/tmp/mpv-socket']:
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.settimeout(1.0)
+            s.connect(sock)
+            s.sendall(ipc_cmd.encode() + b'\\n')
+            s.close()
+            handled = True
+            print('IPC_SUCCESS')
+            break
+        except Exception:
+            pass
+
+if not handled:
+    action = '{action}'
+    if action in ('reset', 'restart'):
+        subprocess.run(['pkill', '-f', 'sync_runner'], check=False)
+        subprocess.run(['pkill', '-f', 'mpv'], check=False)
+        subprocess.run(['pkill', '-f', 'vlc'], check=False)
+        subprocess.run(['systemctl', '--user', 'restart', 'vlc-autoplay.service'], check=False)
+        print('RESTARTED')
+    elif action == 'pause':
+        subprocess.run(['pkill', '-STOP', 'mpv'], check=False)
+        subprocess.run(['pkill', '-STOP', 'vlc'], check=False)
+        print('STOPPED')
+    elif action in ('play', 'unpause', 'toggle'):
+        subprocess.run(['pkill', '-CONT', 'mpv'], check=False)
+        subprocess.run(['pkill', '-CONT', 'vlc'], check=False)
+        print('CONTINUED')
+" """
+        code, stdout, stderr = self.run_command(ip, remote_script, timeout=6)
+        if code == 0 and ("IPC_SUCCESS" in stdout or "RESTARTED" in stdout or "CONTINUED" in stdout or "STOPPED" in stdout):
+            return True, f"Comando '{action}' ejecutado en {ip}"
+        # Si falló, intentar fallback a reinicio estándar
+        if action in ("reset", "restart"):
+            return self.restart_player_service(ip)
+        return False, stderr or stdout or f"No se pudo ejecutar '{action}' en {ip}"
+
     def git_pull_remote(self, ip: str) -> Tuple[bool, str]:
         """Ejecuta git pull en ~/vlc-autoplay-studio."""
         cmd = "cd ~/vlc-autoplay-studio && git pull && sudo systemctl daemon-reload 2>/dev/null || true"
